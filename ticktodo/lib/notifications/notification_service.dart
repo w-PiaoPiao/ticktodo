@@ -39,9 +39,7 @@ class NotificationService {
     if (remindAt == null || task.id == null) return false;
     if (remindAt <= DateTime.now().millisecondsSinceEpoch) return false;
 
-    final when = tz.TZDateTime.fromMillisecondsSinceEpoch(
-        tz.local, remindAt,
-        isUtc: false);
+    final when = _tzDateTime(remindAt);
     await _plugin.zonedSchedule(
       task.id!,
       task.title,
@@ -57,6 +55,8 @@ class NotificationService {
         ),
       ),
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
       payload: '${task.id}',
     );
     return true;
@@ -68,5 +68,13 @@ class NotificationService {
 
   Future<void> cancelAll() async {
     await _plugin.cancelAll();
+  }
+
+  tz.TZDateTime _tzDateTime(int ms) {
+    try {
+      return tz.TZDateTime.fromMillisecondsSinceEpoch(tz.local, ms);
+    } catch (_) {
+      return tz.TZDateTime.fromMillisecondsSinceEpoch(tz.UTC, ms);
+    }
   }
 }

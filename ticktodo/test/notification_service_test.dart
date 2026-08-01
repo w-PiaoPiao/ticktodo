@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ticktodo/data/models/task.dart';
 import 'package:ticktodo/notifications/notification_service.dart';
 
 void main() {
