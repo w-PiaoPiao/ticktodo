@@ -76,6 +76,7 @@ class _AllScreenState extends ConsumerState<AllScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'fab-all',
         onPressed: () => Navigator.of(context).push(MaterialPageRoute(
           builder: (_) => const TaskDetailScreen(taskId: 0),
         )),

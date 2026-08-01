@@ -43,6 +43,7 @@ class TodayScreen extends ConsumerWidget {
         ),
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'fab-today',
         onPressed: () => Navigator.of(context).push(MaterialPageRoute(
           builder: (_) => const TaskDetailScreen(taskId: 0, defaultDueDate: true),
         )),

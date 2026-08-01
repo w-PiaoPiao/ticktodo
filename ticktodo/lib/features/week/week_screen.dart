@@ -41,6 +41,7 @@ class WeekScreen extends ConsumerWidget {
         ),
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'fab-week',
         onPressed: () => Navigator.of(context).push(MaterialPageRoute(
           builder: (_) => const TaskDetailScreen(taskId: 0),
         )),

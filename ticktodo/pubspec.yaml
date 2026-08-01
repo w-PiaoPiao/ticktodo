@@ -42,10 +42,12 @@ dependencies:
   archive: ^3.6.1
   flutter_local_notifications: ^18.0.1
   timezone: ^0.10.0
-  flutter_timezone: ^3.0.1
+  flutter_timezone: ^5.1.0
 
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+  integration_test:
     sdk: flutter
   mocktail: ^1.0.4
   sqflite_common_ffi: ^2.3.4
