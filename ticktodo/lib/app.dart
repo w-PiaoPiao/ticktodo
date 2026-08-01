@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/core/theme.dart';
+import 'package:ticktodo/features/all/all_screen.dart';
+import 'package:ticktodo/features/calendar/calendar_screen.dart';
+import 'package:ticktodo/features/drawer/app_drawer.dart';
+import 'package:ticktodo/features/today/today_screen.dart';
+import 'package:ticktodo/features/week/week_screen.dart';
 
 class TickTodoApp extends ConsumerWidget {
   const TickTodoApp({super.key});
@@ -34,13 +39,14 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      drawer: AppDrawer(onNavigate: (i) => setState(() => _index = i)),
       body: IndexedStack(
         index: _index,
         children: const [
-          _PlaceholderScreen(title: '今天'),
-          _PlaceholderScreen(title: '最近7天'),
-          _PlaceholderScreen(title: '日历'),
-          _PlaceholderScreen(title: '全部'),
+          TodayScreen(),
+          WeekScreen(),
+          CalendarScreen(),
+          AllScreen(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -53,18 +59,6 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           NavigationDestination(icon: Icon(Icons.checklist_outlined), selectedIcon: Icon(Icons.checklist), label: '全部'),
         ],
       ),
-    );
-  }
-}
-
-class _PlaceholderScreen extends StatelessWidget {
-  const _PlaceholderScreen({required this.title});
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text(title, style: Theme.of(context).textTheme.titleLarge),
     );
   }
 }
