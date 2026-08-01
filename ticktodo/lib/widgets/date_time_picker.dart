@@ -57,7 +57,10 @@ class _DateTimeSectionState extends State<DateTimeSection> {
   Future<void> _pickTime() async {
     final initial = widget.task.dueTime == null
         ? const TimeOfDay(hour: 9, minute: 0)
-        : DateUtilsEx.parseTime(widget.task.dueTime!)!;
+        : () {
+            final t = DateUtilsEx.parseTime(widget.task.dueTime!)!;
+            return TimeOfDay(hour: t.hour, minute: t.minute);
+          }();
     final picked = await showTimePicker(context: context, initialTime: initial);
     if (picked == null) return;
     widget.onChanged(
@@ -105,7 +108,7 @@ class _DateTimeSectionState extends State<DateTimeSection> {
           ? DateTime.now()
           : DateUtilsEx.parseDate(widget.task.dueDate!);
       final time = widget.task.dueTime == null
-          ? const TimeOfDay(hour: 9, minute: 0)
+          ? DateTime(2000, 1, 1, 9, 0)
           : DateUtilsEx.parseTime(widget.task.dueTime!)!;
       final dt = DateTime(base.year, base.month, base.day, time.hour, time.minute);
       final picked = await showDatePicker(
