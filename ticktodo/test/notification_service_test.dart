@@ -16,7 +16,7 @@ void main() {
     expect(await service.scheduleReminder(TestTask(remindAt: null)), false);
     expect(
         await service.scheduleReminder(
-            TestTask(remindAt: DateTime.now().millisecondsSinceEpoch + 60000)),
+            TestTask(id: null, remindAt: DateTime.now().millisecondsSinceEpoch + 60000)),
         false);
   });
 }
