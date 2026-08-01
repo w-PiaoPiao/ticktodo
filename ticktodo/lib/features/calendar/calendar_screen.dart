@@ -22,7 +22,10 @@ final monthTasksProvider =
 });
 
 class CalendarScreen extends ConsumerStatefulWidget {
-  const CalendarScreen({super.key});
+  const CalendarScreen({super.key, this.initialDate});
+
+  /// 小部件点击传入的日期（yyyy-MM-dd），打开时定位到该日
+  final String? initialDate;
 
   @override
   ConsumerState<CalendarScreen> createState() => _CalendarScreenState();
@@ -31,6 +34,17 @@ class CalendarScreen extends ConsumerStatefulWidget {
 class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
   DateTime? _selectedDay;
+
+  @override
+  void initState() {
+    super.initState();
+    final d = widget.initialDate;
+    if (d != null && d.isNotEmpty) {
+      final dt = DateUtilsEx.parseDate(d);
+      _month = DateTime(dt.year, dt.month);
+      _selectedDay = dt;
+    }
+  }
 
   void _changeMonth(int delta) {
     setState(() {

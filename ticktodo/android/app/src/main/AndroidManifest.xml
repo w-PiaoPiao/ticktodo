@@ -36,6 +36,23 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- 月视图桌面小部件 -->
+        <receiver
+            android:name=".MonthWidgetProvider"
+            android:exported="true"
+            android:label="滴答清单Pro 月视图">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.ticktodo.ticktodo.WIDGET_PREV" />
+                <action android:name="com.ticktodo.ticktodo.WIDGET_NEXT" />
+                <action android:name="com.ticktodo.ticktodo.WIDGET_TODAY" />
+                <action android:name="com.ticktodo.ticktodo.WIDGET_REFRESH" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/month_widget_info" />
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

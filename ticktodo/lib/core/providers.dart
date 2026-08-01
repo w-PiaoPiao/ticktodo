@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ticktodo/core/widget_bridge.dart';
 import 'package:ticktodo/data/db/app_database.dart';
 import 'package:ticktodo/data/models/list_model.dart';
 import 'package:ticktodo/data/models/tag.dart';
@@ -29,6 +29,7 @@ final taskMutationProvider = StateProvider<int>((ref) => 0);
 void bumpMutation(WidgetRef ref) {
   ref.read(taskMutationProvider.notifier).state++;
   ref.read(syncManagerProvider).scheduleAutoUpload();
+  refreshWidget();
 }
 
 /// 主题模式（跟随系统/浅/深）

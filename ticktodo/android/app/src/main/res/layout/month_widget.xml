@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/widget_bg"
+    android:padding="12dp">
+
+    <!-- 头部：月份 + 操作按钮 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/widget_month"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="@color/widget_text"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:text="2026年8月" />
+
+        <ImageButton
+            android:id="@+id/widget_prev"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:src="@drawable/ic_chevron_left"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="上个月" />
+
+        <ImageButton
+            android:id="@+id/widget_refresh"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:src="@drawable/ic_refresh"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="刷新" />
+
+        <ImageButton
+            android:id="@+id/widget_next"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:src="@drawable/ic_chevron_right"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="下个月" />
+
+        <TextView
+            android:id="@+id/widget_today_btn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="今天"
+            android:textSize="12sp"
+            android:padding="4dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:visibility="gone"
+            android:textColor="@color/widget_accent" />
+    </LinearLayout>
+
+    <!-- 星期表头 -->
+    <LinearLayout
+        android:id="@+id/widget_weekday_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingTop="4dp">
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:gravity="center" android:text="一" android:textSize="10sp" android:textColor="@color/widget_text_secondary" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:gravity="center" android:text="二" android:textSize="10sp" android:textColor="@color/widget_text_secondary" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:gravity="center" android:text="三" android:textSize="10sp" android:textColor="@color/widget_text_secondary" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:gravity="center" android:text="四" android:textSize="10sp" android:textColor="@color/widget_text_secondary" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:gravity="center" android:text="五" android:textSize="10sp" android:textColor="@color/widget_text_secondary" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:gravity="center" android:text="六" android:textSize="10sp" android:textColor="@color/widget_text_secondary" />
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:gravity="center" android:text="日" android:textSize="10sp" android:textColor="@color/widget_text_secondary" />
+    </LinearLayout>
+
+    <!-- 日历网格容器（代码动态填充 7x6） -->
+    <LinearLayout
+        android:id="@+id/widget_grid"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:paddingTop="2dp" />
+</LinearLayout>
