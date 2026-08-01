@@ -1,0 +1,61 @@
+import 'package:ticktodo/data/models/list_model.dart';
+import 'package:ticktodo/data/models/subtask.dart';
+import 'package:ticktodo/data/models/tag.dart';
+import 'package:ticktodo/data/models/task.dart';
+import 'package:ticktodo/data/models/task_tag_link.dart';
+import 'package:ticktodo/sync/snapshot.dart';
+
+/// 按 id 合并两条快照：每条记录取 updatedAt 较新者；同 updatedAt 取 remote（确定性）。
+/// revision 取两者较大值。
+SyncSnapshot mergeSnapshots(SyncSnapshot local, SyncSnapshot remote) {
+  final tasks = _mergeById<Task>(local.tasks, remote.tasks,
+      (a, b) => (a.updatedAt ?? 0) >= (b.updatedAt ?? 0) ? a : b);
+  final subtasks = _mergeById<Subtask>(local.subtasks, remote.subtasks,
+      (a, b) => (a.updatedAt ?? 0) >= (b.updatedAt ?? 0) ? a : b);
+  final lists = _mergeById<ListModel>(local.lists, remote.lists,
+      (a, b) => (a.updatedAt ?? 0) >= (b.updatedAt ?? 0) ? a : b);
+  final tags = _mergeById<Tag>(local.tags, remote.tags,
+      (a, b) => (a.updatedAt ?? 0) >= (b.updatedAt ?? 0) ? a : b);
+  final taskTags = _mergeLinks(local.taskTags, remote.taskTags);
+  return SyncSnapshot(
+    revision: local.revision > remote.revision ? local.revision : remote.revision,
+    tasks: tasks,
+    subtasks: subtasks,
+    lists: lists,
+    tags: tags,
+    taskTags: taskTags,
+  );
+}
+
+List<T> _mergeById<T>(List<T> local, List<T> remote, T Function(T a, T b) pick) {
+  final byId = <int, T>{};
+  for (final item in local) {
+    final id = _idOf(item);
+    if (id != null) byId[id] = item;
+  }
+  for (final item in remote) {
+    final id = _idOf(item);
+    if (id == null) continue;
+    final existing = byId[id];
+    byId[id] = existing == null ? item : pick(existing, item);
+  }
+  final result = byId.values.toList();
+  result.sort((a, b) => (_idOf(a) ?? 0).compareTo(_idOf(b) ?? 0));
+  return result;
+}
+
+int? _idOf(dynamic item) {
+  if (item is Task) return item.id;
+  if (item is Subtask) return item.id;
+  if (item is ListModel) return item.id;
+  if (item is Tag) return item.id;
+  return null;
+}
+
+List<TaskTagLink> _mergeLinks(List<TaskTagLink> local, List<TaskTagLink> remote) {
+  final set = <TaskTagLink>{...local, ...remote};
+  final list = set.toList();
+  list.sort((a, b) =>
+      a.taskId != b.taskId ? a.taskId.compareTo(b.taskId) : a.tagId.compareTo(b.tagId));
+  return list;
+}
