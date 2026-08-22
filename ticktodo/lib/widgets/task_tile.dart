@@ -15,6 +15,10 @@ class TaskTile extends StatelessWidget {
     this.onToggle,
     this.onDelete,
     this.now,
+    this.selectMode = false,
+    this.selected = false,
+    this.onToggleSelect,
+    this.onLongPress,
   });
 
   final Task task;
@@ -25,6 +29,12 @@ class TaskTile extends StatelessWidget {
   final VoidCallback? onToggle;
   final VoidCallback? onDelete;
   final DateTime? now;
+
+  /// true 时进入多选模式：leading 变复选框、禁用滑动删除、点按切换选中。
+  final bool selectMode;
+  final bool selected;
+  final VoidCallback? onToggleSelect;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -68,7 +78,7 @@ class TaskTile extends StatelessWidget {
 
     return Dismissible(
       key: ValueKey('task-${task.id}'),
-      direction: DismissDirection.endToStart,
+      direction: selectMode ? DismissDirection.none : DismissDirection.endToStart,
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
@@ -77,15 +87,24 @@ class TaskTile extends StatelessWidget {
       ),
       onDismissed: (_) => onDelete?.call(),
       child: ListTile(
-        onTap: onTap,
+        onTap: selectMode ? onToggleSelect : onTap,
+        onLongPress: onLongPress,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-        leading: _CheckCircle(
-          key: ValueKey('check-${task.id}'),
-          completed: task.completed,
-          onTap: onToggle,
-        ),
+        leading: selectMode
+            ? Checkbox(
+                value: selected,
+                onChanged: (_) => onToggleSelect?.call(),
+              )
+            : _CheckCircle(
+                key: ValueKey('check-${task.id}'),
+                completed: task.completed,
+                onTap: onToggle,
+              ),
         title: title,
-        subtitle: (task.note.isNotEmpty || dateBadgeWidget != null || timeText != null)
+        subtitle: (task.note.isNotEmpty ||
+                dateBadgeWidget != null ||
+                timeText != null ||
+                task.repeatRule != null)
             ? Padding(
                 padding: const EdgeInsets.only(top: 2),
                 child: Row(
@@ -107,6 +126,10 @@ class TaskTile extends StatelessWidget {
                     if (timeText != null) ...[
                       const SizedBox(width: 6),
                       timeText,
+                    ],
+                    if (task.repeatRule != null) ...[
+                      const SizedBox(width: 6),
+                      Icon(Icons.repeat, size: 14, color: theme.colorScheme.outline),
                     ],
                   ],
                 ),

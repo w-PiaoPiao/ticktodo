@@ -1,4 +1,6 @@
 import 'package:sqflite/sqflite.dart';
+import 'package:ticktodo/core/constants.dart';
+import 'package:ticktodo/core/repeat_rule.dart';
 import 'package:ticktodo/data/db/app_database.dart';
 import 'package:ticktodo/data/models/subtask.dart';
 import 'package:ticktodo/data/models/task.dart';
@@ -71,6 +73,84 @@ class TaskRepository {
     }, where: 'id = ?', whereArgs: [id]);
   }
 
+  /// 完成（可能重复的）任务：原任务置为已完成；
+  /// 若设置了重复规则且有到期日，克隆生成下一期未完成任务
+  /// （子任务/标签关联同步克隆，提醒保持相对偏移），返回下一期；
+  /// 否则返回 null（仅完成）。
+  Future<Task?> completeAndAdvance(int taskId) async {
+    final now = _now();
+    return db.transaction((txn) async {
+      final rows = await txn.query('tasks', where: 'id = ?', whereArgs: [taskId]);
+      if (rows.isEmpty) return null;
+      final task = Task.fromMap(rows.first);
+      if (task.completed) return null;
+
+      await txn.update('tasks', {'completed': 1, 'updatedAt': now},
+          where: 'id = ?', whereArgs: [taskId]);
+
+      final rule = RepeatRule.parse(task.repeatRule);
+      if (rule == null || task.dueDate == null) return null;
+
+      final baseDate = DateUtilsEx.parseDate(task.dueDate!);
+      final nextDate = rule.nextDue(baseDate);
+
+      // 提醒保持相对偏移：新 remindAt = 新期开始时刻 +（旧提醒 − 旧期开始时刻）
+      int? nextRemindAt;
+      final oldRemindAt = task.remindAt;
+      if (oldRemindAt != null && task.dueTime != null) {
+        final parts = task.dueTime!.split(':');
+        final offset =
+            Duration(hours: int.parse(parts[0]), minutes: int.parse(parts[1]));
+        final dueStart = baseDate.add(offset).millisecondsSinceEpoch;
+        final nextStart = nextDate.add(offset).millisecondsSinceEpoch;
+        nextRemindAt = nextStart + (oldRemindAt - dueStart);
+      }
+
+      // 注意：copyWith 无法清空 id（id ?? this.id），克隆必须手动构造。
+      final next = Task(
+        title: task.title,
+        note: task.note,
+        priority: task.priority,
+        dueDate: DateUtilsEx.formatDate(nextDate),
+        dueTime: task.dueTime,
+        remindAt: nextRemindAt,
+        listId: task.listId,
+        sortOrder: task.sortOrder,
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      final newId = await txn.insert('tasks', next.toMap()..remove('id'));
+
+      // 克隆子任务（全部重置为未完成）
+      final subs = await txn.query('subtasks',
+          where: 'taskId = ? AND deletedAt IS NULL', whereArgs: [taskId]);
+      for (final s in subs) {
+        final sm = Subtask.fromMap(s);
+        final clone = Subtask(
+          taskId: newId,
+          title: sm.title,
+          sortOrder: sm.sortOrder,
+          createdAt: now,
+          updatedAt: now,
+        );
+        await txn.insert('subtasks', clone.toMap()..remove('id'));
+      }
+
+      // 克隆标签关联
+      final links =
+          await txn.query('task_tags', where: 'taskId = ?', whereArgs: [taskId]);
+      for (final l in links) {
+        await txn.insert('task_tags',
+            {'taskId': newId, 'tagId': l['tagId'] as int},
+            conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
+
+      final out = await txn.query('tasks', where: 'id = ?', whereArgs: [newId]);
+      return Task.fromMap(out.first);
+    });
+  }
+
   Future<Task?> getTask(int id) async {
     final rows = await db.query('tasks', where: 'id = ?', whereArgs: [id]);
     if (rows.isEmpty) return null;
@@ -135,8 +215,78 @@ class TaskRepository {
       JOIN task_tags tt ON tt.taskId = t.id
       WHERE t.deletedAt IS NULL AND tt.tagId IN ($ph)
       ORDER BY t.completed ASC, t.priority DESC, t.id ASC
-    ''', tagIds);
+     ''', tagIds);
     return rows.map(Task.fromMap).toList();
+  }
+
+  /// 全局搜索：标题或备注包含关键词（大小写不敏感），排除已删除。
+  Future<List<Task>> searchTasks(String keyword) async {
+    final kw = '%${keyword.trim()}%';
+    if (kw == '%%') return const [];
+    final rows = await db.query('tasks',
+        where:
+            "deletedAt IS NULL AND (title LIKE ? COLLATE NOCASE OR note LIKE ? COLLATE NOCASE)",
+        whereArgs: [kw, kw],
+        orderBy: 'completed ASC, priority DESC, dueDate ASC, id ASC');
+    return rows.map(Task.fromMap).toList();
+  }
+
+  // ---------- 批量操作 ----------
+
+  String _placeholders(int n) => List.filled(n, '?').join(',');
+
+  Future<void> bulkSoftDelete(List<int> ids) async {
+    if (ids.isEmpty) return;
+    final now = _now();
+    await db.update('tasks', {'deletedAt': now, 'updatedAt': now},
+        where: 'id IN (${_placeholders(ids.length)})', whereArgs: ids);
+  }
+
+  Future<void> bulkMoveToList(List<int> ids, int listId) async {
+    if (ids.isEmpty) return;
+    final now = _now();
+    await db.update('tasks', {'listId': listId, 'updatedAt': now},
+        where: 'id IN (${_placeholders(ids.length)})', whereArgs: ids);
+  }
+
+  Future<void> bulkSetDueDate(List<int> ids, String? date) async {
+    if (ids.isEmpty) return;
+    final now = _now();
+    await db.update('tasks', {'dueDate': date, 'updatedAt': now},
+        where: 'id IN (${_placeholders(ids.length)})', whereArgs: ids);
+  }
+
+  // ---------- 回收站 ----------
+
+  /// 所有软删除任务，按删除时间倒序。
+  Future<List<Task>> queryDeleted() async {
+    final rows = await db.query('tasks',
+        where: 'deletedAt IS NOT NULL', orderBy: 'deletedAt DESC');
+    return rows.map(Task.fromMap).toList();
+  }
+
+  /// 彻底删除任务及其子任务、标签关联。
+  Future<void> hardDeleteTasks(List<int> ids) async {
+    if (ids.isEmpty) return;
+    final ph = _placeholders(ids.length);
+    await db.transaction((txn) async {
+      await txn.delete('subtasks', where: 'taskId IN ($ph)', whereArgs: ids);
+      await txn.delete('task_tags', where: 'taskId IN ($ph)', whereArgs: ids);
+      await txn.delete('tasks', where: 'id IN ($ph)', whereArgs: ids);
+    });
+  }
+
+  /// 清理已彻底过期（deletedAt 早于 olderThanMs 毫秒前）的回收站任务，返回清理数量。
+  Future<int> purgeDeleted({int olderThanMs = 0}) async {
+    final cutoff = DateTime.now().millisecondsSinceEpoch - olderThanMs;
+    final rows = await db.query('tasks',
+        columns: ['id'],
+        where: 'deletedAt IS NOT NULL AND deletedAt <= ?',
+        whereArgs: [cutoff]);
+    if (rows.isEmpty) return 0;
+    final ids = rows.map((r) => r['id'] as int).toList();
+    await hardDeleteTasks(ids);
+    return ids.length;
   }
 
   // ---------- 子任务 ----------

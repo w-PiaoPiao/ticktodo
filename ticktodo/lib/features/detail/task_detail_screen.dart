@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ticktodo/core/constants.dart';
 import 'package:ticktodo/core/providers.dart';
+import 'package:ticktodo/core/repeat_rule.dart';
 import 'package:ticktodo/data/models/subtask.dart';
 import 'package:ticktodo/data/models/task.dart';
 import 'package:ticktodo/features/detail/subtask_section.dart';
@@ -9,6 +10,7 @@ import 'package:ticktodo/features/detail/tag_section.dart';
 import 'package:ticktodo/notifications/notification_service.dart';
 import 'package:ticktodo/widgets/date_time_picker.dart';
 import 'package:ticktodo/widgets/priority_picker.dart';
+import 'package:ticktodo/widgets/repeat_picker.dart';
 
 class TaskDetailScreen extends ConsumerStatefulWidget {
   const TaskDetailScreen({
@@ -159,6 +161,29 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           ),
           const Divider(height: 24),
           DateTimeSection(task: task, onChanged: _save),
+          ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.repeat, size: 20),
+            title: Text(task.repeatRule == null
+                ? '重复'
+                : '重复 · ${RepeatRule.parse(task.repeatRule)?.label ?? '自定义'}'),
+            trailing: task.repeatRule == null
+                ? const Icon(Icons.chevron_right)
+                : IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip: '清除重复',
+                    onPressed: () => _save(task.copyWith(clearRepeatRule: true)),
+                  ),
+            onTap: () async {
+              final encoded =
+                  await showRepeatPicker(context, currentEncoded: task.repeatRule);
+              if (!mounted || encoded == null) return; // 取消/点外部关闭
+              _save(encoded.isEmpty
+                  ? task.copyWith(clearRepeatRule: true)
+                  : task.copyWith(repeatRule: encoded));
+            },
+          ),
           const Divider(height: 24),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),

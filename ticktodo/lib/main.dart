@@ -40,6 +40,9 @@ Future<void> main() async {
 
   // 打开 App 自动同步（不阻塞启动）
   unawaitedSync(syncManager.syncNow());
+  // 自动清理回收站中删除超过 30 天的任务
+  unawaitedSync(
+      taskRepo.purgeDeleted(olderThanMs: 30 * 24 * 3600 * 1000));
 }
 
 void unawaitedSync(Future<void> f) {

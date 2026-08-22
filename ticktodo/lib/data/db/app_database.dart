@@ -6,7 +6,7 @@ class AppDatabase {
 
   final Database db;
 
-  static const _version = 1;
+  static const _version = 2;
 
   static Future<AppDatabase> open({String? inMemoryPath}) async {
     final path = inMemoryPath ??
@@ -17,9 +17,15 @@ class AppDatabase {
       onCreate: (db, _) => createTables(db),
       onUpgrade: (db, oldV, newV) async {
         if (oldV < 1) await createTables(db);
+        if (oldV >= 1 && oldV < 2) await migrateV1To2(db);
       },
     );
     return AppDatabase(db);
+  }
+
+  /// v1 → v2：tasks 表新增 repeatRule 列（简化 RRULE 编码，NULL=不重复）。
+  static Future<void> migrateV1To2(DatabaseExecutor db) async {
+    await db.execute('ALTER TABLE tasks ADD COLUMN repeatRule TEXT');
   }
 
   static Future<void> createTables(DatabaseExecutor db) async {
@@ -60,7 +66,8 @@ class AppDatabase {
         sortOrder INTEGER NOT NULL DEFAULT 0,
         createdAt INTEGER,
         updatedAt INTEGER,
-        deletedAt INTEGER
+        deletedAt INTEGER,
+        repeatRule TEXT
       )
     ''');
     await db.execute('''

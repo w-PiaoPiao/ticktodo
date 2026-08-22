@@ -28,6 +28,7 @@ class Task {
     this.createdAt,
     this.updatedAt,
     this.deletedAt,
+    this.repeatRule,
   });
 
   final int? id;
@@ -43,6 +44,9 @@ class Task {
   final int? createdAt;
   final int? updatedAt;
   final int? deletedAt;
+
+  /// 重复规则（简化 RRULE 编码），null = 不重复。
+  final String? repeatRule;
 
   bool get isDeleted => deletedAt != null;
 
@@ -60,10 +64,12 @@ class Task {
     int? createdAt,
     int? updatedAt,
     int? deletedAt,
+    String? repeatRule,
     bool clearDueDate = false,
     bool clearDueTime = false,
     bool clearRemindAt = false,
     bool clearDeletedAt = false,
+    bool clearRepeatRule = false,
   }) {
     return Task(
       id: id ?? this.id,
@@ -79,6 +85,7 @@ class Task {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: clearDeletedAt ? null : (deletedAt ?? this.deletedAt),
+      repeatRule: clearRepeatRule ? null : (repeatRule ?? this.repeatRule),
     );
   }
 
@@ -96,6 +103,7 @@ class Task {
         'createdAt': createdAt,
         'updatedAt': updatedAt,
         'deletedAt': deletedAt,
+        'repeatRule': repeatRule,
       };
 
   factory Task.fromMap(Map<String, Object?> map) => Task(
@@ -112,6 +120,7 @@ class Task {
         createdAt: map['createdAt'] as int?,
         updatedAt: map['updatedAt'] as int?,
         deletedAt: map['deletedAt'] as int?,
+        repeatRule: map['repeatRule'] as String?,
       );
 
   @override

@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/features/lists/lists_screen.dart';
+import 'package:ticktodo/features/search/search_screen.dart';
 import 'package:ticktodo/features/settings/settings_screen.dart';
 import 'package:ticktodo/features/tags/tags_screen.dart';
+import 'package:ticktodo/features/trash/trash_screen.dart';
 
 class AppDrawer extends ConsumerWidget {
   const AppDrawer({super.key, this.onNavigate});
@@ -117,6 +119,20 @@ class AppDrawer extends ConsumerWidget {
               title: const Text('标签管理'),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const TagsScreen()),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.search),
+              title: const Text('搜索任务'),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SearchScreen()),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline),
+              title: const Text('回收站'),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const TrashScreen()),
               ),
             ),
             const Divider(),

@@ -5,6 +5,7 @@ import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/data/models/task.dart';
 import 'package:ticktodo/features/detail/task_detail_screen.dart';
 import 'package:ticktodo/features/shared/task_list_view.dart';
+import 'package:ticktodo/widgets/quick_add_sheet.dart';
 
 /// 最近7天视图
 final weekTasksProvider = FutureProvider<List<Task>>((ref) async {
@@ -42,9 +43,7 @@ class WeekScreen extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton(
         heroTag: 'fab-week',
-        onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => const TaskDetailScreen(taskId: 0),
-        )),
+        onPressed: () => showQuickAdd(context),
         child: const Icon(Icons.add),
       ),
       body: TaskListView(

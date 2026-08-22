@@ -5,7 +5,9 @@ import 'package:ticktodo/core/constants.dart';
 import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/data/models/task.dart';
 import 'package:ticktodo/features/detail/task_detail_screen.dart';
+import 'package:ticktodo/features/search/search_screen.dart';
 import 'package:ticktodo/features/shared/task_list_view.dart';
+import 'package:ticktodo/widgets/quick_add_sheet.dart';
 
 /// 今天视图
 final todayTasksProvider = FutureProvider<List<Task>>((ref) async {
@@ -41,12 +43,19 @@ class TodayScreen extends ConsumerWidget {
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            tooltip: '搜索',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SearchScreen()),
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         heroTag: 'fab-today',
-        onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => const TaskDetailScreen(taskId: 0, defaultDueDate: true),
-        )),
+        onPressed: () => showQuickAdd(context, defaultDueDate: true),
         child: const Icon(Icons.add),
       ),
       body: TaskListView(

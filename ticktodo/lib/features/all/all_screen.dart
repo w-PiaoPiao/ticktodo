@@ -4,6 +4,7 @@ import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/data/models/task.dart';
 import 'package:ticktodo/features/detail/task_detail_screen.dart';
 import 'package:ticktodo/features/shared/task_list_view.dart';
+import 'package:ticktodo/widgets/quick_add_sheet.dart';
 
 /// 全部任务：未完成在前，按清单分组？——统一列表 + 筛选 chips
 final allTasksProvider = FutureProvider<List<Task>>((ref) async {
@@ -77,9 +78,7 @@ class _AllScreenState extends ConsumerState<AllScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         heroTag: 'fab-all',
-        onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => const TaskDetailScreen(taskId: 0),
-        )),
+        onPressed: () => showQuickAdd(context),
         child: const Icon(Icons.add),
       ),
       body: TaskListView(
