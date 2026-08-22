@@ -31,12 +31,39 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
   int _totalSeconds = FocusScreen.focusMinutes * 60;
   int _finishedFocusCount = 0; // 本轮次内完成番茄数（决定长短休）
   Task? _selectedTask;
+  // 缓存查询结果：避免计时期间每秒 build 重建 DB 查询
+  late final Future<List<Task>> _taskFuture =
+      ref.read(taskRepoProvider).queryAll(includeCompleted: false);
+  Future<List<int>>? _statsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _statsFuture = _loadStats();
+  }
+
+  Future<List<int>> _loadStats() => Future.wait([
+        ref.read(pomodoroRepoProvider).todayCount(),
+        ref.read(pomodoroRepoProvider).todayMinutes(),
+      ]);
+
+  /// 完成一个会话后刷新今日统计。
+  void _refreshStats() {
+    setState(() => _statsFuture = _loadStats());
+  }
 
   @override
   void dispose() {
     _timer?.cancel();
     super.dispose();
   }
+
+  String get _endTitle =>
+      _phase == _Phase.breakTime ? '休息结束' : '专注完成';
+
+  String get _endBody => _phase == _Phase.breakTime
+      ? '休息结束，继续加油！'
+      : '番茄结束，休息一下吧 🎉';
 
   void _startFocus() {
     setState(() {
@@ -47,7 +74,7 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
       _running = true;
     });
     _scheduleTick();
-    _notifyAtEnd('专注完成', '番茄结束，休息一下吧 🎉');
+    _scheduleEndNotification();
   }
 
   void _startBreak() {
@@ -63,18 +90,19 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
       _running = true;
     });
     _scheduleTick();
-    _notifyAtEnd('休息结束', long ? '长休结束，开始新一轮专注！' : '休息结束，继续加油！');
+    _scheduleEndNotification();
   }
 
-  /// 段结束时发即时通知（App 在后台也能收到）
-  void _notifyAtEnd(String title, String body) {
-    final secondsLeft = _totalSeconds;
-    Future.delayed(Duration(seconds: secondsLeft), () async {
-      if (!mounted || !_running) return;
-      await ref
-          .read(notificationServiceProvider)
-          .showNow(title: title, body: body, id: 900000);
-    });
+  /// 按当前剩余时间调度系统级结束通知（绝对时间，由 OS 触发）。
+  ///
+  /// 用系统调度而非 Future.delayed：后者在移动端挂起后不执行导致
+  /// 后台到点不通知，且暂停后 stale 回调会在错误时刻弹通知。
+  void _scheduleEndNotification() {
+    ref.read(notificationServiceProvider).schedulePomodoroEnd(
+          title: _endTitle,
+          body: _endBody,
+          at: DateTime.now().add(Duration(seconds: _remaining)),
+        );
   }
 
   void _scheduleTick() {
@@ -110,6 +138,7 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
         _finishedFocusCount++;
         _running = false;
       });
+      _refreshStats();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('🍅 第 $_finishedFocusCount 个番茄完成！'),
@@ -126,6 +155,7 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
 
   Future<void> _giveUp() async {
     _timer?.cancel();
+    await ref.read(notificationServiceProvider).cancelPomodoroNotification();
     if (_phase == _Phase.focus && _segmentStart != null) {
       final elapsedMin =
           DateTime.now().difference(_segmentStart!).inMinutes;
@@ -139,6 +169,7 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
               completed: false,
             ));
         bumpMutation(ref);
+        _refreshStats();
       }
     }
     setState(() {
@@ -152,19 +183,23 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
 
   Future<void> _pauseResume() async {
     if (_running) {
-      // 暂停：记录暂停时刻的剩余
+      // 暂停：冻结剩余时间，保留原总时长（进度环位置不变）
       _timer?.cancel();
       final elapsed = DateTime.now().difference(_segmentStart!).inSeconds;
       setState(() {
-        _remaining = _totalSeconds - elapsed;
+        _remaining =
+            (_totalSeconds - elapsed).clamp(0, _totalSeconds);
         _running = false;
       });
-      // 用剩余重设起点，恢复时按新窗口计时
-      _totalSeconds = _remaining;
-      _segmentStart = DateTime.now();
+      // 取消已调度的结束通知，恢复时按剩余时间重新调度
+      ref.read(notificationServiceProvider).cancelPomodoroNotification();
     } else {
       setState(() => _running = true);
+      // 按剩余时间回推段起点，保持真实时间差计算正确
+      _segmentStart = DateTime.now()
+          .subtract(Duration(seconds: _totalSeconds - _remaining));
       _scheduleTick();
+      _scheduleEndNotification();
     }
   }
 
@@ -287,8 +322,7 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: FutureBuilder<List<Task>>(
-        future:
-            ref.read(taskRepoProvider).queryAll(includeCompleted: false),
+        future: _taskFuture,
         builder: (_, snap) {
           final tasks = snap.data ?? const <Task>[];
           return DropdownButtonFormField<Task?>(
@@ -324,10 +358,7 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
     return Padding(
       padding: const EdgeInsets.only(top: 4),
       child: FutureBuilder<List<int>>(
-        future: Future.wait([
-          ref.read(pomodoroRepoProvider).todayCount(),
-          ref.read(pomodoroRepoProvider).todayMinutes(),
-        ]),
+        future: _statsFuture,
         builder: (_, snap) {
           final data = snap.data ?? const [0, 0];
           return Text('今日 ${data[0]} 个番茄 · 累计专注 ${data[1]} 分钟',

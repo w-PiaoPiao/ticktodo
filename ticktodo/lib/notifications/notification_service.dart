@@ -117,7 +117,61 @@ class NotificationService {
   static const int _extraIdStride = 1000;
   static const int _maxExtraPerTask = 50;
 
-  /// 立即显示一条通知（番茄阶段切换等即时提醒）。
+  /// 番茄阶段通知专用 id：取值远超任务提醒 id 空间（taskId*1000+50），
+  /// 避免任务数增长后撞车。
+  static const int pomodoroNotificationId = 1900000001;
+
+  static const NotificationDetails _pomodoroDetails = NotificationDetails(
+    android: AndroidNotificationDetails(
+      'pomodoro',
+      '番茄专注',
+      channelDescription: '专注/休息阶段切换提醒',
+      importance: Importance.high,
+      priority: Priority.high,
+    ),
+    iOS: DarwinNotificationDetails(
+      presentAlert: true,
+      presentSound: true,
+    ),
+    macOS: DarwinNotificationDetails(
+      presentAlert: true,
+      presentSound: true,
+    ),
+  );
+
+  /// 调度番茄阶段结束通知（绝对时间，由系统触发）。
+  ///
+  /// 必须用 zonedSchedule 而非 Future.delayed：后者在移动端 App 挂起后
+  /// 不执行，导致后台到点不通知；且暂停后 stale 回调会误报。
+  Future<void> schedulePomodoroEnd({
+    required String title,
+    required String body,
+    required DateTime at,
+  }) async {
+    try {
+      await _plugin.zonedSchedule(
+        pomodoroNotificationId,
+        title,
+        body,
+        _tzDateTime(at.millisecondsSinceEpoch),
+        _pomodoroDetails,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    } catch (_) {
+      // 测试环境/平台异常静默
+    }
+  }
+
+  /// 取消番茄阶段结束通知（暂停/放弃/段切换时调用）。
+  Future<void> cancelPomodoroNotification() async {
+    try {
+      await _plugin.cancel(pomodoroNotificationId);
+    } catch (_) {}
+  }
+
+  /// 立即显示一条通知（即时提醒）。
   Future<void> showNow({
     required String title,
     required String body,
@@ -125,21 +179,7 @@ class NotificationService {
     String? payload,
   }) async {
     try {
-      await _plugin.show(
-        id,
-        title,
-        body,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'pomodoro',
-            '番茄专注',
-            channelDescription: '专注/休息阶段切换提醒',
-            importance: Importance.high,
-            priority: Priority.high,
-          ),
-        ),
-        payload: payload,
-      );
+      await _plugin.show(id, title, body, _pomodoroDetails, payload: payload);
     } catch (_) {
       // 测试环境/平台异常静默
     }
