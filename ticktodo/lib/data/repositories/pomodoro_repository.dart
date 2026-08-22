@@ -75,4 +75,12 @@ class PomodoroRepository {
     }
     return result;
   }
+
+  /// 物理清理软删超过 [olderThanMs] 毫秒的会话记录，返回清理行数。
+  Future<int> purgeDeleted({int olderThanMs = 0}) async {
+    final cutoff = DateTime.now().millisecondsSinceEpoch - olderThanMs;
+    return db.delete('pomodoros',
+        where: 'deletedAt IS NOT NULL AND deletedAt <= ?',
+        whereArgs: [cutoff]);
+  }
 }

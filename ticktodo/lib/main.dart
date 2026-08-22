@@ -8,6 +8,8 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:ticktodo/app.dart';
 import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/data/db/app_database.dart';
+import 'package:ticktodo/data/repositories/habit_repository.dart';
+import 'package:ticktodo/data/repositories/pomodoro_repository.dart';
 import 'package:ticktodo/data/repositories/task_repository.dart';
 import 'package:ticktodo/features/detail/task_detail_screen.dart';
 import 'package:ticktodo/notifications/notification_service.dart';
@@ -65,9 +67,13 @@ Future<void> main() async {
 
   // 打开 App 自动同步（不阻塞启动）
   unawaitedSync(syncManager.syncNow());
-  // 自动清理回收站中删除超过 30 天的任务
+  // 自动清理回收站中删除超过 30 天的数据（任务/习惯/打卡/番茄会话）
   unawaitedSync(
       taskRepo.purgeDeleted(olderThanMs: 30 * 24 * 3600 * 1000));
+  unawaitedSync(HabitRepository(appDb)
+      .purgeDeleted(olderThanMs: 30 * 24 * 3600 * 1000));
+  unawaitedSync(PomodoroRepository(appDb)
+      .purgeDeleted(olderThanMs: 30 * 24 * 3600 * 1000));
 }
 
 void unawaitedSync(Future<void> f) {
