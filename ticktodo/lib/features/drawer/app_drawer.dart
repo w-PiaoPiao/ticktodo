@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/features/filters/filters_screen.dart';
+import 'package:ticktodo/features/focus/focus_screen.dart';
+import 'package:ticktodo/features/habits/habits_screen.dart';
 import 'package:ticktodo/features/lists/lists_screen.dart';
 import 'package:ticktodo/features/search/search_screen.dart';
 import 'package:ticktodo/features/settings/settings_screen.dart';
@@ -127,6 +129,20 @@ class AppDrawer extends ConsumerWidget {
               title: const Text('智能清单'),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const FiltersScreen()),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.repeat_one_outlined),
+              title: const Text('习惯打卡'),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const HabitsScreen()),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.timer_outlined),
+              title: const Text('番茄专注'),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const FocusScreen()),
               ),
             ),
             ListTile(

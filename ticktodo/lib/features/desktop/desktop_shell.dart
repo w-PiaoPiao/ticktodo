@@ -6,6 +6,8 @@ import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/features/all/all_screen.dart';
 import 'package:ticktodo/features/calendar/calendar_screen.dart';
 import 'package:ticktodo/features/filters/filters_screen.dart';
+import 'package:ticktodo/features/focus/focus_screen.dart';
+import 'package:ticktodo/features/habits/habits_screen.dart';
 import 'package:ticktodo/features/matrix/matrix_screen.dart';
 import 'package:ticktodo/features/search/search_screen.dart';
 import 'package:ticktodo/features/settings/settings_screen.dart';
@@ -59,6 +61,18 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
   void _openFilters() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const FiltersScreen()),
+    );
+  }
+
+  void _openHabits() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const HabitsScreen()),
+    );
+  }
+
+  void _openFocus() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const FocusScreen()),
     );
   }
 
@@ -163,6 +177,8 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
                 onOpenTrash: _openTrash,
                 onOpenSettings: _openSettings,
                 onOpenFilters: _openFilters,
+                onOpenHabits: _openHabits,
+                onOpenFocus: _openFocus,
               ),
               VerticalDivider(width: 1, thickness: 1, color: theme.dividerColor),
               Expanded(
@@ -196,6 +212,8 @@ class _Sidebar extends ConsumerStatefulWidget {
     required this.onOpenTrash,
     required this.onOpenSettings,
     required this.onOpenFilters,
+    required this.onOpenHabits,
+    required this.onOpenFocus,
   });
 
   final int selectedIndex;
@@ -205,6 +223,8 @@ class _Sidebar extends ConsumerStatefulWidget {
   final VoidCallback onOpenTrash;
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenFilters;
+  final VoidCallback onOpenHabits;
+  final VoidCallback onOpenFocus;
 
   @override
   ConsumerState<_Sidebar> createState() => _SidebarState();
@@ -311,6 +331,8 @@ class _SidebarState extends ConsumerState<_Sidebar> {
             _actionTile(Icons.add, '新建任务', widget.onQuickAdd),
             _actionTile(Icons.search, '搜索', widget.onSearch),
             _actionTile(Icons.filter_alt_outlined, '智能清单', widget.onOpenFilters),
+            _actionTile(Icons.repeat_one_outlined, '习惯打卡', widget.onOpenHabits),
+            _actionTile(Icons.timer_outlined, '番茄专注', widget.onOpenFocus),
             _actionTile(Icons.delete_outline, '回收站', widget.onOpenTrash),
             _actionTile(Icons.settings_outlined, '设置 ⌘,', widget.onOpenSettings),
             const SizedBox(height: 10),

@@ -1,4 +1,5 @@
 import 'package:ticktodo/data/models/filter.dart';
+import 'package:ticktodo/data/models/habit.dart';
 import 'package:ticktodo/data/models/list_model.dart';
 import 'package:ticktodo/data/models/reminder.dart';
 import 'package:ticktodo/data/models/subtask.dart';
@@ -23,6 +24,12 @@ SyncSnapshot mergeSnapshots(SyncSnapshot local, SyncSnapshot remote) {
       _mergeById<Reminder>(local.reminders, remote.reminders, pickNewer);
   final filters =
       _mergeById<Filter>(local.filters, remote.filters, pickNewer);
+  final habits =
+      _mergeById<Habit>(local.habits, remote.habits, pickNewer);
+  final habitChecks =
+      _mergeById<HabitCheck>(local.habitChecks, remote.habitChecks, pickNewer);
+  final pomodoros =
+      _mergeById<PomodoroSession>(local.pomodoros, remote.pomodoros, pickNewer);
   return SyncSnapshot(
     revision: local.revision > remote.revision ? local.revision : remote.revision,
     tasks: tasks,
@@ -32,12 +39,18 @@ SyncSnapshot mergeSnapshots(SyncSnapshot local, SyncSnapshot remote) {
     taskTags: taskTags,
     reminders: reminders,
     filters: filters,
+    habits: habits,
+    habitChecks: habitChecks,
+    pomodoros: pomodoros,
   );
 }
 
 T pickNewer<T>(T a, T b) => _updatedAtOf(a) >= _updatedAtOf(b) ? a : b;
 
 int _updatedAtOf(dynamic item) {
+  if (item is Habit) return item.updatedAt ?? 0;
+  if (item is HabitCheck) return item.updatedAt ?? 0;
+  if (item is PomodoroSession) return item.updatedAt ?? 0;
   if (item is Task) return item.updatedAt ?? 0;
   if (item is Subtask) return item.updatedAt ?? 0;
   if (item is ListModel) return item.updatedAt ?? 0;
@@ -65,6 +78,9 @@ List<T> _mergeById<T>(List<T> local, List<T> remote, T Function(T a, T b) pick) 
 }
 
 int? _idOf(dynamic item) {
+  if (item is Habit) return item.id;
+  if (item is HabitCheck) return item.id;
+  if (item is PomodoroSession) return item.id;
   if (item is Reminder) return item.id;
   if (item is Filter) return item.id;
   if (item is Task) return item.id;

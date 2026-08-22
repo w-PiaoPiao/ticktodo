@@ -117,6 +117,34 @@ class NotificationService {
   static const int _extraIdStride = 1000;
   static const int _maxExtraPerTask = 50;
 
+  /// 立即显示一条通知（番茄阶段切换等即时提醒）。
+  Future<void> showNow({
+    required String title,
+    required String body,
+    required int id,
+    String? payload,
+  }) async {
+    try {
+      await _plugin.show(
+        id,
+        title,
+        body,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'pomodoro',
+            '番茄专注',
+            channelDescription: '专注/休息阶段切换提醒',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+        ),
+        payload: payload,
+      );
+    } catch (_) {
+      // 测试环境/平台异常静默
+    }
+  }
+
   /// 调度一组额外提醒时间（通知 id = taskId * stride + 序号）。
   Future<void> scheduleExtraReminders({
     required int taskId,

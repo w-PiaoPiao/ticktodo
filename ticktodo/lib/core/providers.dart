@@ -7,6 +7,8 @@ import 'package:ticktodo/data/models/tag.dart';
 import 'package:ticktodo/data/repositories/meta_repository.dart';
 import 'package:ticktodo/data/repositories/task_repository.dart';
 import 'package:ticktodo/data/repositories/filter_repository.dart';
+import 'package:ticktodo/data/repositories/habit_repository.dart';
+import 'package:ticktodo/data/repositories/pomodoro_repository.dart';
 import 'package:ticktodo/data/models/task.dart';
 import 'package:ticktodo/notifications/notification_service.dart';
 import 'package:ticktodo/sync/sync_manager.dart';
@@ -20,6 +22,10 @@ final metaRepoProvider =
     Provider<MetaRepository>((ref) => MetaRepository(ref.watch(appDbProvider)));
 final filterRepoProvider = Provider<FilterRepository>(
     (ref) => FilterRepository(ref.watch(appDbProvider)));
+final habitRepoProvider =
+    Provider<HabitRepository>((ref) => HabitRepository(ref.watch(appDbProvider)));
+final pomodoroRepoProvider = Provider<PomodoroRepository>(
+    (ref) => PomodoroRepository(ref.watch(appDbProvider)));
 final syncSettingsProvider = Provider<SyncSettings>(
     (ref) => throw UnimplementedError());
 final syncManagerProvider = Provider<SyncManager>(

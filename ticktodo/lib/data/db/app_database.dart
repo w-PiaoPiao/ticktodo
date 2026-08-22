@@ -6,7 +6,7 @@ class AppDatabase {
 
   final Database db;
 
-  static const _version = 3;
+  static const _version = 4;
 
   static Future<AppDatabase> open({String? inMemoryPath}) async {
     final path = inMemoryPath ??
@@ -19,6 +19,7 @@ class AppDatabase {
         if (oldV < 1) await createTables(db);
         if (oldV >= 1 && oldV < 2) await migrateV1To2(db);
         if (oldV >= 2 && oldV < 3) await migrateV2To3(db);
+        if (oldV >= 3 && oldV < 4) await migrateV3To4(db);
       },
     );
     return AppDatabase(db);
@@ -86,6 +87,55 @@ class AppDatabase {
         'updatedAt': now,
       });
     }
+  }
+
+  /// v3 → v4：习惯打卡 + 番茄专注
+  static Future<void> migrateV3To4(DatabaseExecutor db) async {
+    await _createHabitTables(db);
+  }
+
+  static Future<void> _createHabitTables(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS habits (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        color INTEGER NOT NULL DEFAULT 0xFF2F9D45,
+        targetDays INTEGER NOT NULL DEFAULT 0,
+        archived INTEGER NOT NULL DEFAULT 0,
+        sortOrder INTEGER NOT NULL DEFAULT 0,
+        createdAt INTEGER,
+        updatedAt INTEGER,
+        deletedAt INTEGER
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS habit_checks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        habitId INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        createdAt INTEGER,
+        updatedAt INTEGER,
+        deletedAt INTEGER,
+        UNIQUE(habitId, date)
+      )
+    ''');
+    await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_habit_checks_habit ON habit_checks(habitId)');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS pomodoros (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        taskId INTEGER,
+        taskTitle TEXT NOT NULL DEFAULT '',
+        startedAt INTEGER NOT NULL,
+        durationMinutes INTEGER NOT NULL DEFAULT 25,
+        completed INTEGER NOT NULL DEFAULT 1,
+        createdAt INTEGER,
+        updatedAt INTEGER,
+        deletedAt INTEGER
+      )
+    ''');
+    await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_pomodoros_started ON pomodoros(startedAt)');
   }
 
   static Future<void> createTables(DatabaseExecutor db) async {
@@ -179,5 +229,6 @@ class AppDatabase {
         deletedAt INTEGER
       )
     ''');
+    await _createHabitTables(db);
   }
 }

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import 'package:ticktodo/data/db/app_database.dart';
 import 'package:ticktodo/data/models/filter.dart';
+import 'package:ticktodo/data/models/habit.dart';
 import 'package:ticktodo/data/models/list_model.dart';
 import 'package:ticktodo/data/models/reminder.dart';
 import 'package:ticktodo/data/models/subtask.dart';
@@ -19,6 +20,9 @@ class SyncSnapshot {
     required this.taskTags,
     this.reminders = const [],
     this.filters = const [],
+    this.habits = const [],
+    this.habitChecks = const [],
+    this.pomodoros = const [],
   });
 
   final int revision;
@@ -29,6 +33,9 @@ class SyncSnapshot {
   final List<TaskTagLink> taskTags;
   final List<Reminder> reminders;
   final List<Filter> filters;
+  final List<Habit> habits;
+  final List<HabitCheck> habitChecks;
+  final List<PomodoroSession> pomodoros;
 
   Map<String, dynamic> toJson() => {
         'revision': revision,
@@ -39,6 +46,9 @@ class SyncSnapshot {
         'taskTags': taskTags.map((l) => l.toMap()).toList(),
         'reminders': reminders.map((r) => r.toMap()).toList(),
         'filters': filters.map((f) => f.toMap()).toList(),
+        'habits': habits.map((h) => h.toMap()).toList(),
+        'habitChecks': habitChecks.map((h) => h.toMap()).toList(),
+        'pomodoros': pomodoros.map((p) => p.toMap()).toList(),
       };
 
   factory SyncSnapshot.fromJson(Map<String, dynamic> json) => SyncSnapshot(
@@ -63,6 +73,15 @@ class SyncSnapshot {
             .toList(),
         filters: ((json['filters'] as List?) ?? [])
             .map((e) => Filter.fromMap((e as Map).cast<String, Object?>()))
+            .toList(),
+        habits: ((json['habits'] as List?) ?? [])
+            .map((e) => Habit.fromMap((e as Map).cast<String, Object?>()))
+            .toList(),
+        habitChecks: ((json['habitChecks'] as List?) ?? [])
+            .map((e) => HabitCheck.fromMap((e as Map).cast<String, Object?>()))
+            .toList(),
+        pomodoros: ((json['pomodoros'] as List?) ?? [])
+            .map((e) => PomodoroSession.fromMap((e as Map).cast<String, Object?>()))
             .toList(),
       );
 
@@ -96,6 +115,15 @@ Future<SyncSnapshot> buildSnapshot(
   final filters = await appDb.db
       .query('filters', where: 'deletedAt IS NULL')
       .then((rows) => rows.map(Filter.fromMap).toList());
+  final habits = await appDb.db
+      .query('habits', where: 'deletedAt IS NULL')
+      .then((rows) => rows.map(Habit.fromMap).toList());
+  final habitChecks = await appDb.db
+      .query('habit_checks', where: 'deletedAt IS NULL')
+      .then((rows) => rows.map(HabitCheck.fromMap).toList());
+  final pomodoros = await appDb.db
+      .query('pomodoros', where: 'deletedAt IS NULL')
+      .then((rows) => rows.map(PomodoroSession.fromMap).toList());
 
   final maxUpdated = <int?>[
     tasks.map((t) => t.updatedAt).fold<int?>(null, (a, b) => a == null || (b != null && b > a) ? b : a),
@@ -115,6 +143,9 @@ Future<SyncSnapshot> buildSnapshot(
     taskTags: taskTags,
     reminders: reminders,
     filters: filters,
+    habits: habits,
+    habitChecks: habitChecks,
+    pomodoros: pomodoros,
   );
 }
 
@@ -157,6 +188,25 @@ Future<void> applySnapshot(AppDatabase appDb, SyncSnapshot snapshot) async {
         batch.insert('filters', f.toMap(),
             conflictAlgorithm: ConflictAlgorithm.replace);
       }
+    }
+    // 习惯与番茄：打卡记录含 UNIQUE(habitId,date)，replace 即可
+    await txn.delete('habits');
+    for (final h in snapshot.habits) {
+      batch.insert('habits', h.id == null
+          ? (h.toMap()..remove('id'))
+          : h.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await txn.delete('habit_checks');
+    for (final h in snapshot.habitChecks) {
+      batch.insert('habit_checks', h.id == null
+          ? (h.toMap()..remove('id'))
+          : h.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    await txn.delete('pomodoros');
+    for (final p in snapshot.pomodoros) {
+      batch.insert('pomodoros', p.id == null
+          ? (p.toMap()..remove('id'))
+          : p.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
     }
     for (final l in snapshot.lists) {
       if (l.id == null) {
