@@ -6,7 +6,9 @@ import 'package:ticktodo/data/models/habit.dart';
 import 'package:ticktodo/features/habits/habit_edit_sheet.dart';
 import 'package:ticktodo/widgets/empty_state.dart';
 
-/// 习惯页：今日打卡列表 + 连续天数 + 近 5 周热力图。
+/// 习惯页：今日打卡列表 + 连续天数 + 本周进度 + 近 5 周热力图。
+///
+/// 支持查看已归档习惯并恢复；卡片菜单提供归档/删除入口。
 class HabitsScreen extends ConsumerStatefulWidget {
   const HabitsScreen({super.key});
 
@@ -18,25 +20,34 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
   List<Habit>? _habits;
   final Map<int, bool> _checkedToday = {};
   final Map<int, int> _streaks = {};
+  final Map<int, int> _weekCounts = {};
   final Map<int, Set<String>> _recentDates = {};
+  bool _showArchived = false;
+  ProviderSubscription<int>? _mutationSub;
 
   @override
   void initState() {
     super.initState();
-    ref.listenManual(taskMutationProvider, (_, _) => _load());
+    _mutationSub = ref.listenManual(taskMutationProvider, (_, _) => _load());
     _load();
   }
 
+  @override
+  void dispose() {
+    _mutationSub?.close();
+    super.dispose();
+  }
+
   Future<void> _load() async {
-    final habits = await ref.read(habitRepoProvider).queryHabits();
     final repo = ref.read(habitRepoProvider);
+    final habits = await repo.queryHabits(includeArchived: _showArchived);
     final todayStr = DateUtilsEx.formatDate(DateTime.now());
     for (final h in habits) {
       if (h.id == null) continue;
       _checkedToday[h.id!] = await repo.isCheckedOn(h.id!, todayStr);
       _streaks[h.id!] = await repo.currentStreak(h.id!);
-      _recentDates[h.id!] =
-          await _loadRecent(h.id!);
+      _weekCounts[h.id!] = await repo.weekCheckCount(h.id!);
+      _recentDates[h.id!] = await _loadRecent(h.id!);
     }
     if (!mounted) return;
     setState(() => _habits = habits);
@@ -52,6 +63,7 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
   }
 
   Future<void> _toggle(Habit h) async {
+    if (h.archived || h.id == null) return;
     final todayStr = DateUtilsEx.formatDate(DateTime.now());
     await ref.read(habitRepoProvider).toggleCheck(h.id!, todayStr);
     bumpMutation(ref);
@@ -68,8 +80,35 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
     if (saved == true) _load();
   }
 
-  Future<void> _archive(Habit h) async {
-    await ref.read(habitRepoProvider).archiveHabit(h.id!);
+  Future<void> _setArchived(Habit h, {required bool archived}) async {
+    await ref.read(habitRepoProvider).archiveHabit(h.id!, archived: archived);
+    bumpMutation(ref);
+    _load();
+  }
+
+  Future<void> _delete(Habit h) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除习惯'),
+        content: Text('确定删除「${h.name}」吗？其打卡记录将一并隐藏，无法在界面恢复。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || h.id == null) return;
+    await ref.read(habitRepoProvider).softDeleteHabit(h.id!);
     bumpMutation(ref);
     _load();
   }
@@ -79,7 +118,24 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
     final theme = Theme.of(context);
     final habits = _habits;
     return Scaffold(
-      appBar: AppBar(title: const Text('习惯')),
+      appBar: AppBar(
+        title: Text(_showArchived ? '已归档习惯' : '习惯'),
+        actions: [
+          IconButton(
+            tooltip: _showArchived ? '返回习惯列表' : '查看已归档',
+            icon: Icon(_showArchived
+                ? Icons.repeat_one_outlined
+                : Icons.inventory_2_outlined),
+            onPressed: () {
+              setState(() {
+                _showArchived = !_showArchived;
+                _habits = null;
+              });
+              _load();
+            },
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         heroTag: 'fab-habits',
         onPressed: () => _openEditor(),
@@ -89,9 +145,13 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
           ? const Center(child: CircularProgressIndicator())
           : habits.isEmpty
               ? EmptyState(
-                  icon: Icons.repeat_one_outlined,
-                  title: '还没有习惯',
-                  subtitle: '点击右下角 + 创建第一个习惯',
+                  icon: _showArchived
+                      ? Icons.inventory_2_outlined
+                      : Icons.repeat_one_outlined,
+                  title: _showArchived ? '没有已归档的习惯' : '还没有习惯',
+                  subtitle: _showArchived
+                      ? '长按习惯卡片即可归档'
+                      : '点击右下角 + 创建第一个习惯',
                 )
               : RefreshIndicator(
                   onRefresh: _load,
@@ -103,15 +163,22 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
                           habit: h,
                           checkedToday: _checkedToday[h.id] ?? false,
                           streak: _streaks[h.id] ?? 0,
-                          recentDates:
-                              _recentDates[h.id] ?? const {},
+                          weekCount: _weekCounts[h.id] ?? 0,
+                          recentDates: _recentDates[h.id] ?? const {},
                           onToggle: () => _toggle(h),
                           onTap: () => _openEditor(h),
-                          onLongPress: () => _archive(h),
+                          onLongPress:
+                              h.archived ? null : () => _setArchived(h, archived: true),
+                          onArchiveToggle: () =>
+                              _setArchived(h, archived: !h.archived),
+                          onDelete: () => _delete(h),
                         ),
                       Padding(
                         padding: const EdgeInsets.all(16),
-                        child: Text('长按卡片可归档习惯',
+                        child: Text(
+                            _showArchived
+                                ? '通过卡片右侧菜单可恢复或删除习惯'
+                                : '长按卡片或使用卡片右侧菜单：归档 / 删除',
                             textAlign: TextAlign.center,
                             style: theme.textTheme.bodySmall
                                 ?.copyWith(color: theme.colorScheme.outline)),
@@ -130,19 +197,28 @@ class _HabitCard extends StatelessWidget {
     required this.habit,
     required this.checkedToday,
     required this.streak,
+    required this.weekCount,
     required this.recentDates,
     required this.onToggle,
     required this.onTap,
     required this.onLongPress,
+    required this.onArchiveToggle,
+    required this.onDelete,
   });
 
   final Habit habit;
   final bool checkedToday;
   final int streak;
+  final int weekCount;
   final Set<String> recentDates;
   final VoidCallback onToggle;
   final VoidCallback onTap;
-  final VoidCallback onLongPress;
+  final VoidCallback? onLongPress;
+  final VoidCallback onArchiveToggle;
+  final VoidCallback onDelete;
+
+  /// 每周目标上限：0（每天）按 7 天展示。
+  int get _weeklyTarget => habit.targetDays == 0 ? 7 : habit.targetDays;
 
   @override
   Widget build(BuildContext context) {
@@ -157,29 +233,37 @@ class _HabitCard extends StatelessWidget {
         onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  InkWell(
-                    onTap: onToggle,
-                    customBorder: const CircleBorder(),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: checkedToday ? color : Colors.transparent,
-                        border: Border.all(color: color, width: 2),
+                  if (habit.archived)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: Icon(Icons.archive_outlined,
+                          size: 22, color: theme.colorScheme.outline),
+                    )
+                  else
+                    InkWell(
+                      onTap: onToggle,
+                      customBorder: const CircleBorder(),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: checkedToday ? color : Colors.transparent,
+                          border: Border.all(color: color, width: 2),
+                        ),
+                        child: checkedToday
+                            ? const Icon(Icons.check,
+                                size: 20, color: Colors.white)
+                            : null,
                       ),
-                      child: checkedToday
-                          ? const Icon(Icons.check, size: 20, color: Colors.white)
-                          : null,
                     ),
-                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(habit.name,
@@ -195,6 +279,12 @@ class _HabitCard extends StatelessWidget {
                       visualDensity: VisualDensity.compact,
                       backgroundColor: const Color(0x1AF29900),
                     ),
+                  Chip(
+                    label: Text('本周 $weekCount/$_weeklyTarget',
+                        style: theme.textTheme.labelSmall),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  _cardMenu(context),
                 ],
               ),
               const SizedBox(height: 10),
@@ -207,6 +297,46 @@ class _HabitCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _cardMenu(BuildContext context) {
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert, size: 20),
+      tooltip: '更多操作',
+      onSelected: (action) {
+        switch (action) {
+          case 'archive':
+            onArchiveToggle();
+          case 'delete':
+            onDelete();
+        }
+      },
+      itemBuilder: (_) => [
+        PopupMenuItem(
+          value: 'archive',
+          child: ListTile(
+            leading: Icon(habit.archived
+                ? Icons.unarchive_outlined
+                : Icons.archive_outlined),
+            title: Text(habit.archived ? '恢复到列表' : '归档'),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+        PopupMenuItem(
+          value: 'delete',
+          child: ListTile(
+            leading: Icon(Icons.delete_outline,
+                color: Theme.of(context).colorScheme.error),
+            title: Text('删除',
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.error)),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+      ],
     );
   }
 }

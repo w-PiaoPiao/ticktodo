@@ -38,6 +38,7 @@ class _HabitEditSheetState extends ConsumerState<HabitEditSheet> {
           targetDays: _targetDays,
           archived: widget.existing?.archived ?? false,
           sortOrder: widget.existing?.sortOrder ?? 0,
+          createdAt: widget.existing?.createdAt, // 编辑时保留原创建时间
         ));
     bumpMutation(ref);
     if (mounted) Navigator.pop(context, true);

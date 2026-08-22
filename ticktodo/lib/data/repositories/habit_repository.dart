@@ -102,24 +102,24 @@ class HabitRepository {
   /// 连续打卡天数：从今天往前数（今天未打卡则从昨天起算），遇断档停止。
   Future<int> currentStreak(int habitId, {DateTime? now}) async {
     final n = now ?? DateTime.now();
-    var cursor =
-        DateTime(n.year, n.month, n.day); // 今天 00:00
+    // 一次拉取全部打卡日期，内存中回溯，避免逐天 N+1 查询
+    final rows = await db.query('habit_checks',
+        columns: ['date'],
+        where: 'habitId = ? AND deletedAt IS NULL',
+        whereArgs: [habitId]);
+    final checked = rows.map((r) => r['date'] as String).toSet();
+
+    var cursor = DateTime(n.year, n.month, n.day); // 今天 00:00
     // 今天还没打卡不中断连续，从昨天开始数
-    final todayStr = DateUtilsEx.formatDate(cursor);
-    if (!await isCheckedOn(habitId, todayStr)) {
+    if (!checked.contains(DateUtilsEx.formatDate(cursor))) {
       cursor = cursor.subtract(const Duration(days: 1));
     }
     var streak = 0;
-    while (true) {
-      final d = DateUtilsEx.formatDate(cursor);
-      if (await isCheckedOn(habitId, d)) {
-        streak++;
-        cursor = cursor.subtract(const Duration(days: 1));
-        // 防御上限：最多回溯 10 年
-        if (streak > 3650) break;
-      } else {
-        break;
-      }
+    while (checked.contains(DateUtilsEx.formatDate(cursor))) {
+      streak++;
+      cursor = cursor.subtract(const Duration(days: 1));
+      // 防御上限：最多回溯 10 年
+      if (streak > 3650) break;
     }
     return streak;
   }
@@ -141,5 +141,20 @@ class HabitRepository {
         start: DateUtilsEx.formatDate(monday),
         end: DateUtilsEx.formatDate(n));
     return dates.length;
+  }
+
+  /// 物理清理软删超过 [olderThanMs] 毫秒的习惯与打卡记录，返回清理行数。
+  Future<int> purgeDeleted({int olderThanMs = 0}) async {
+    final cutoff = DateTime.now().millisecondsSinceEpoch - olderThanMs;
+    final habits = await db.delete('habits',
+        where: 'deletedAt IS NOT NULL AND deletedAt <= ?',
+        whereArgs: [cutoff]);
+    // 打卡记录可能因习惯已硬删而成为孤儿，一并按自身 deletedAt 清理
+    final checks = await db.delete('habit_checks',
+        where:
+            'deletedAt IS NOT NULL AND deletedAt <= ? '
+            'OR habitId NOT IN (SELECT id FROM habits)',
+        whereArgs: [cutoff]);
+    return habits + checks;
   }
 }
