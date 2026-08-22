@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import 'package:ticktodo/data/db/app_database.dart';
+import 'package:ticktodo/data/models/filter.dart';
 import 'package:ticktodo/data/models/list_model.dart';
+import 'package:ticktodo/data/models/reminder.dart';
 import 'package:ticktodo/data/models/subtask.dart';
 import 'package:ticktodo/data/models/tag.dart';
 import 'package:ticktodo/data/models/task.dart';
@@ -15,6 +17,8 @@ class SyncSnapshot {
     required this.lists,
     required this.tags,
     required this.taskTags,
+    this.reminders = const [],
+    this.filters = const [],
   });
 
   final int revision;
@@ -23,6 +27,8 @@ class SyncSnapshot {
   final List<ListModel> lists;
   final List<Tag> tags;
   final List<TaskTagLink> taskTags;
+  final List<Reminder> reminders;
+  final List<Filter> filters;
 
   Map<String, dynamic> toJson() => {
         'revision': revision,
@@ -31,6 +37,8 @@ class SyncSnapshot {
         'lists': lists.map((l) => l.toMap()).toList(),
         'tags': tags.map((t) => t.toMap()).toList(),
         'taskTags': taskTags.map((l) => l.toMap()).toList(),
+        'reminders': reminders.map((r) => r.toMap()).toList(),
+        'filters': filters.map((f) => f.toMap()).toList(),
       };
 
   factory SyncSnapshot.fromJson(Map<String, dynamic> json) => SyncSnapshot(
@@ -49,6 +57,12 @@ class SyncSnapshot {
             .toList(),
         taskTags: ((json['taskTags'] as List?) ?? [])
             .map((e) => TaskTagLink.fromMap((e as Map).cast<String, Object?>()))
+            .toList(),
+        reminders: ((json['reminders'] as List?) ?? [])
+            .map((e) => Reminder.fromMap((e as Map).cast<String, Object?>()))
+            .toList(),
+        filters: ((json['filters'] as List?) ?? [])
+            .map((e) => Filter.fromMap((e as Map).cast<String, Object?>()))
             .toList(),
       );
 
@@ -76,6 +90,12 @@ Future<SyncSnapshot> buildSnapshot(
   final taskTags = await appDb.db
       .query('task_tags')
       .then((rows) => rows.map(TaskTagLink.fromMap).toList());
+  final reminders = await appDb.db
+      .query('reminders', where: 'deletedAt IS NULL')
+      .then((rows) => rows.map(Reminder.fromMap).toList());
+  final filters = await appDb.db
+      .query('filters', where: 'deletedAt IS NULL')
+      .then((rows) => rows.map(Filter.fromMap).toList());
 
   final maxUpdated = <int?>[
     tasks.map((t) => t.updatedAt).fold<int?>(null, (a, b) => a == null || (b != null && b > a) ? b : a),
@@ -93,6 +113,8 @@ Future<SyncSnapshot> buildSnapshot(
     lists: lists,
     tags: tags,
     taskTags: taskTags,
+    reminders: reminders,
+    filters: filters,
   );
 }
 
@@ -114,6 +136,25 @@ Future<void> applySnapshot(AppDatabase appDb, SyncSnapshot snapshot) async {
         batch.insert('subtasks', s.toMap()..remove('id'));
       } else {
         batch.insert('subtasks', s.toMap(),
+            conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+    }
+    // 额外提醒：先软清后写，保证与快照一致（含"已全部删除"场景）
+    await txn.delete('reminders');
+    for (final r in snapshot.reminders) {
+      if (r.id == null) {
+        batch.insert('reminders', r.toMap()..remove('id'));
+      } else {
+        batch.insert('reminders', r.toMap(),
+            conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+    }
+    await txn.delete('filters');
+    for (final f in snapshot.filters) {
+      if (f.id == null) {
+        batch.insert('filters', f.toMap()..remove('id'));
+      } else {
+        batch.insert('filters', f.toMap(),
             conflictAlgorithm: ConflictAlgorithm.replace);
       }
     }

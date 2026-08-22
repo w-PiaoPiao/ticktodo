@@ -6,6 +6,7 @@ import 'package:ticktodo/data/models/list_model.dart';
 import 'package:ticktodo/data/models/tag.dart';
 import 'package:ticktodo/data/repositories/meta_repository.dart';
 import 'package:ticktodo/data/repositories/task_repository.dart';
+import 'package:ticktodo/data/repositories/filter_repository.dart';
 import 'package:ticktodo/data/models/task.dart';
 import 'package:ticktodo/notifications/notification_service.dart';
 import 'package:ticktodo/sync/sync_manager.dart';
@@ -17,6 +18,8 @@ final taskRepoProvider = Provider<TaskRepository>(
     (ref) => TaskRepository(ref.watch(appDbProvider)));
 final metaRepoProvider =
     Provider<MetaRepository>((ref) => MetaRepository(ref.watch(appDbProvider)));
+final filterRepoProvider = Provider<FilterRepository>(
+    (ref) => FilterRepository(ref.watch(appDbProvider)));
 final syncSettingsProvider = Provider<SyncSettings>(
     (ref) => throw UnimplementedError());
 final syncManagerProvider = Provider<SyncManager>(
@@ -40,12 +43,43 @@ Future<void> toggleTaskWithRepeat(WidgetRef ref, Task t) async {
   if (!t.completed && t.repeatRule != null && t.dueDate != null) {
     final notifications = ref.read(notificationServiceProvider);
     final next = await repo.completeAndAdvance(t.id!);
-    await notifications.cancelReminder(t.id!);
-    if (next != null && next.remindAt != null) {
-      await notifications.scheduleReminder(next);
+    await notifications.cancelReminder(t.id!); // 同时清额外提醒槽位
+    if (next != null) {
+      if (next.remindAt != null) {
+        await notifications.scheduleReminder(next);
+      }
+      final extras = await repo.queryRemindersOf(next.id!);
+      if (extras.isNotEmpty) {
+        await notifications.scheduleExtraReminders(
+          taskId: next.id!,
+          title: next.title,
+          note: next.note,
+          epochs: extras.map((e) => e.remindAt).toList(),
+        );
+      }
     }
   } else {
     await repo.toggleComplete(t.id!, !t.completed);
+    // 完成后取消额外提醒；取消完成则恢复调度
+    final notifications = ref.read(notificationServiceProvider);
+    if (t.id != null) {
+      await notifications.cancelReminder(t.id!);
+      if (!t.completed) {
+        final fresh = await repo.getTask(t.id!);
+        if (fresh?.remindAt != null) {
+          await notifications.scheduleReminder(fresh!);
+        }
+        final extras = await repo.queryRemindersOf(t.id!);
+        if (extras.isNotEmpty && fresh != null) {
+          await notifications.scheduleExtraReminders(
+            taskId: t.id!,
+            title: fresh.title,
+            note: fresh.note,
+            epochs: extras.map((e) => e.remindAt).toList(),
+          );
+        }
+      }
+    }
   }
   bumpMutation(ref);
 }

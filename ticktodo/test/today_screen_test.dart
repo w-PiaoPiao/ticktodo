@@ -37,6 +37,9 @@ void main() {
           ListModel(id: 1, name: '收集箱', isDefault: true),
         ]);
     when(() => meta.queryTags()).thenAnswer((_) async => const []);
+    // toggleTaskWithRepeat 普通完成后会查询任务与额外提醒以重调度
+    when(() => repo.getTask(any())).thenAnswer((_) async => null);
+    when(() => repo.queryRemindersOf(any())).thenAnswer((_) async => const []);
   });
 
   tearDown(() async {

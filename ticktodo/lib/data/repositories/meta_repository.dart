@@ -51,7 +51,8 @@ class MetaRepository {
 
   Future<List<ListModel>> queryLists() async {
     final rows = await db.query('lists',
-        where: 'deletedAt IS NULL', orderBy: 'sortOrder ASC, id ASC');
+        where: 'deletedAt IS NULL',
+        orderBy: 'isPinned DESC, sortOrder ASC, id ASC');
     return rows.map(ListModel.fromMap).toList();
   }
 

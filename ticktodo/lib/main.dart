@@ -9,6 +9,7 @@ import 'package:ticktodo/app.dart';
 import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/data/db/app_database.dart';
 import 'package:ticktodo/data/repositories/task_repository.dart';
+import 'package:ticktodo/features/detail/task_detail_screen.dart';
 import 'package:ticktodo/notifications/notification_service.dart';
 import 'package:ticktodo/sync/sync_manager.dart';
 import 'package:ticktodo/sync/sync_settings.dart';
@@ -39,6 +40,16 @@ Future<void> main() async {
     await notifications.requestPermissions();
   } catch (_) {}
 
+  // 点击通知 → 跳转对应任务详情
+  void openTaskFromNotification(int taskId) {
+    appNavigatorKey.currentState?.push(
+      MaterialPageRoute(builder: (_) => TaskDetailScreen(taskId: taskId)),
+    );
+  }
+
+  notifications.onNotificationTap = openTaskFromNotification;
+  final launchTaskId = notifications.initialTaskId;
+
   runApp(ProviderScope(
     overrides: [
       appDbProvider.overrideWithValue(appDb),
@@ -46,7 +57,10 @@ Future<void> main() async {
       syncManagerProvider.overrideWithValue(syncManager),
       notificationServiceProvider.overrideWithValue(notifications),
     ],
-    child: const TickTodoApp(),
+    child: TickTodoApp(
+      initialTaskId: launchTaskId,
+      onOpenTask: openTaskFromNotification,
+    ),
   ));
 
   // 打开 App 自动同步（不阻塞启动）

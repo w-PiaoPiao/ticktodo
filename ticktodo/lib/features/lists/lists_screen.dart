@@ -35,6 +35,29 @@ class _ListsScreenState extends ConsumerState<ListsScreen> {
     bumpMutation(ref);
   }
 
+  /// 拖拽排序：按新顺序批量写回 sortOrder
+  Future<void> _reorder(int oldIndex, int newIndex) async {
+    final lists =
+        (ref.read(listsProvider).valueOrNull ?? const <ListModel>[]).toList();
+    if (oldIndex < 0 || oldIndex >= lists.length) return;
+    setState(() {
+      if (newIndex > oldIndex) newIndex -= 1;
+      final moved = lists.removeAt(oldIndex);
+      lists.insert(newIndex.clamp(0, lists.length), moved);
+    });
+    final meta = ref.read(metaRepoProvider);
+    for (var i = 0; i < lists.length; i++) {
+      await meta.upsertList(lists[i].copyWith(sortOrder: i));
+    }
+    bumpMutation(ref);
+  }
+
+  Future<void> _togglePin(ListModel list) async {
+    final meta = ref.read(metaRepoProvider);
+    await meta.upsertList(list.copyWith(isPinned: !list.isPinned));
+    bumpMutation(ref);
+  }
+
   Future<void> _deleteList(ListModel list) async {
     if (list.isDefault) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -81,11 +104,14 @@ class _ListsScreenState extends ConsumerState<ListsScreen> {
       body: Column(
         children: [
           Expanded(
-            child: ListView.builder(
+            child: ReorderableListView.builder(
               itemCount: lists.length,
+              onReorder: _reorder,
+              buildDefaultDragHandles: !widget.pickMode,
               itemBuilder: (ctx, i) {
                 final list = lists[i];
                 return ListTile(
+                  key: ValueKey('list-${list.id}'),
                   leading: Container(
                     width: 12,
                     height: 12,
@@ -94,7 +120,15 @@ class _ListsScreenState extends ConsumerState<ListsScreen> {
                       shape: BoxShape.circle,
                     ),
                   ),
-                  title: Text(list.name),
+                  title: Row(
+                    children: [
+                      if (list.isPinned) ...[
+                        Icon(Icons.push_pin, size: 13, color: Theme.of(context).colorScheme.primary),
+                        const SizedBox(width: 4),
+                      ],
+                      Expanded(child: Text(list.name)),
+                    ],
+                  ),
                   subtitle: FutureBuilder<int>(
                     future: taskRepo.queryByList(list.id!).then((t) => t.length),
                     builder: (_, snap) => Text(
@@ -104,12 +138,29 @@ class _ListsScreenState extends ConsumerState<ListsScreen> {
                   ),
                   trailing: widget.pickMode
                       ? const Icon(Icons.chevron_right)
-                      : list.isDefault
-                          ? const Text('默认', style: TextStyle(color: Colors.grey))
-                          : IconButton(
-                              icon: const Icon(Icons.delete_outline),
-                              onPressed: () => _deleteList(list),
+                      : Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: Icon(
+                                list.isPinned
+                                    ? Icons.push_pin
+                                    : Icons.push_pin_outlined,
+                                size: 20,
+                                color: list.isPinned
+                                    ? Theme.of(context).colorScheme.primary
+                                    : null,
+                              ),
+                              tooltip: list.isPinned ? '取消置顶' : '置顶',
+                              onPressed: () => _togglePin(list),
                             ),
+                            if (!list.isDefault)
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline),
+                                onPressed: () => _deleteList(list),
+                              ),
+                          ],
+                        ),
                   onTap: widget.pickMode
                       ? () => Navigator.pop(context, list)
                       : null,

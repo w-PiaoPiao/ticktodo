@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:ticktodo/core/constants.dart';
 import 'package:ticktodo/core/repeat_rule.dart';
 import 'package:ticktodo/data/db/app_database.dart';
+import 'package:ticktodo/data/models/reminder.dart';
 import 'package:ticktodo/data/models/subtask.dart';
 import 'package:ticktodo/data/models/task.dart';
 
@@ -146,6 +147,28 @@ class TaskRepository {
             conflictAlgorithm: ConflictAlgorithm.ignore);
       }
 
+      // 克隆额外提醒（应用同样的日期偏移）
+      final oldReminders = await txn.query('reminders',
+          where: 'taskId = ? AND deletedAt IS NULL', whereArgs: [taskId]);
+      if (oldReminders.isNotEmpty && task.dueTime != null) {
+        final parts = task.dueTime!.split(':');
+        final offset =
+            Duration(hours: int.parse(parts[0]), minutes: int.parse(parts[1]));
+        final dueStart =
+            baseDate.add(offset).millisecondsSinceEpoch;
+        final nextStart =
+            nextDate.add(offset).millisecondsSinceEpoch;
+        final shift = nextStart - dueStart;
+        for (final r in oldReminders) {
+          await txn.insert('reminders', {
+            'taskId': newId,
+            'remindAt': (r['remindAt'] as int) + shift,
+            'createdAt': now,
+            'updatedAt': now,
+          });
+        }
+      }
+
       final out = await txn.query('tasks', where: 'id = ?', whereArgs: [newId]);
       return Task.fromMap(out.first);
     });
@@ -265,13 +288,14 @@ class TaskRepository {
     return rows.map(Task.fromMap).toList();
   }
 
-  /// 彻底删除任务及其子任务、标签关联。
+  /// 彻底删除任务及其子任务、标签关联、额外提醒。
   Future<void> hardDeleteTasks(List<int> ids) async {
     if (ids.isEmpty) return;
     final ph = _placeholders(ids.length);
     await db.transaction((txn) async {
       await txn.delete('subtasks', where: 'taskId IN ($ph)', whereArgs: ids);
       await txn.delete('task_tags', where: 'taskId IN ($ph)', whereArgs: ids);
+      await txn.delete('reminders', where: 'taskId IN ($ph)', whereArgs: ids);
       await txn.delete('tasks', where: 'id IN ($ph)', whereArgs: ids);
     });
   }
@@ -340,5 +364,39 @@ class TaskRepository {
         where: 'taskId = ? AND deletedAt IS NULL', whereArgs: [taskId],
         orderBy: 'sortOrder ASC, id ASC');
     return rows.map(Subtask.fromMap).toList();
+  }
+
+  // ---------- 额外提醒时间 ----------
+
+  /// 任务的额外提醒（按时间升序）。
+  Future<List<Reminder>> queryRemindersOf(int taskId) async {
+    final rows = await db.query('reminders',
+        where: 'taskId = ? AND deletedAt IS NULL', whereArgs: [taskId],
+        orderBy: 'remindAt ASC');
+    return rows.map(Reminder.fromMap).toList();
+  }
+
+  /// 全量替换任务的额外提醒（软删旧行 + 插入新行）。
+  Future<void> setReminders(int taskId, List<int> epochs) async {
+    final now = _now();
+    await db.transaction((txn) async {
+      await txn.update('reminders', {'deletedAt': now, 'updatedAt': now},
+          where: 'taskId = ? AND deletedAt IS NULL', whereArgs: [taskId]);
+      for (final e in epochs) {
+        await txn.insert('reminders', {
+          'taskId': taskId,
+          'remindAt': e,
+          'createdAt': now,
+          'updatedAt': now,
+        });
+      }
+    });
+  }
+
+  /// 软删除任务的全部额外提醒。
+  Future<void> clearReminders(int taskId) async {
+    final now = _now();
+    await db.update('reminders', {'deletedAt': now, 'updatedAt': now},
+        where: 'taskId = ? AND deletedAt IS NULL', whereArgs: [taskId]);
   }
 }

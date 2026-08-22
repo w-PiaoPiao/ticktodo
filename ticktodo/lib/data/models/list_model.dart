@@ -6,6 +6,7 @@ class ListModel {
     this.icon = 0,
     this.sortOrder = 0,
     this.isDefault = false,
+    this.isPinned = false,
     this.createdAt,
     this.updatedAt,
     this.deletedAt,
@@ -17,6 +18,7 @@ class ListModel {
   final int icon;
   final int sortOrder;
   final bool isDefault;
+  final bool isPinned;
   final int? createdAt;
   final int? updatedAt;
   final int? deletedAt;
@@ -30,6 +32,7 @@ class ListModel {
     int? icon,
     int? sortOrder,
     bool? isDefault,
+    bool? isPinned,
     int? createdAt,
     int? updatedAt,
     int? deletedAt,
@@ -42,6 +45,7 @@ class ListModel {
       icon: icon ?? this.icon,
       sortOrder: sortOrder ?? this.sortOrder,
       isDefault: isDefault ?? this.isDefault,
+      isPinned: isPinned ?? this.isPinned,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: clearDeletedAt ? null : (deletedAt ?? this.deletedAt),
@@ -55,6 +59,7 @@ class ListModel {
         'icon': icon,
         'sortOrder': sortOrder,
         'isDefault': isDefault ? 1 : 0,
+        'isPinned': isPinned ? 1 : 0,
         'createdAt': createdAt,
         'updatedAt': updatedAt,
         'deletedAt': deletedAt,
@@ -67,6 +72,7 @@ class ListModel {
         icon: map['icon'] as int? ?? 0,
         sortOrder: map['sortOrder'] as int? ?? 0,
         isDefault: (map['isDefault'] as int? ?? 0) == 1,
+        isPinned: (map['isPinned'] as int? ?? 0) == 1,
         createdAt: map['createdAt'] as int?,
         updatedAt: map['updatedAt'] as int?,
         deletedAt: map['deletedAt'] as int?,

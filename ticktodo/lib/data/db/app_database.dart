@@ -6,7 +6,7 @@ class AppDatabase {
 
   final Database db;
 
-  static const _version = 2;
+  static const _version = 3;
 
   static Future<AppDatabase> open({String? inMemoryPath}) async {
     final path = inMemoryPath ??
@@ -18,6 +18,7 @@ class AppDatabase {
       onUpgrade: (db, oldV, newV) async {
         if (oldV < 1) await createTables(db);
         if (oldV >= 1 && oldV < 2) await migrateV1To2(db);
+        if (oldV >= 2 && oldV < 3) await migrateV2To3(db);
       },
     );
     return AppDatabase(db);
@@ -26,6 +27,65 @@ class AppDatabase {
   /// v1 → v2：tasks 表新增 repeatRule 列（简化 RRULE 编码，NULL=不重复）。
   static Future<void> migrateV1To2(DatabaseExecutor db) async {
     await db.execute('ALTER TABLE tasks ADD COLUMN repeatRule TEXT');
+  }
+
+  /// v2 → v3：
+  /// - reminders 表（多提醒时间）
+  /// - filters 表（自定义过滤器/智能清单）
+  /// - lists.isPinned（清单置顶）
+  /// - 数据迁移：已有任务的主提醒 remindAt 写入 reminders
+  static Future<void> migrateV2To3(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS reminders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        taskId INTEGER NOT NULL,
+        remindAt INTEGER NOT NULL,
+        createdAt INTEGER,
+        updatedAt INTEGER,
+        deletedAt INTEGER
+      )
+    ''');
+    await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_reminders_taskId ON reminders(taskId)');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS filters (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        listIds TEXT NOT NULL DEFAULT '[]',
+        tagIds TEXT NOT NULL DEFAULT '[]',
+        minPriority INTEGER NOT NULL DEFAULT 0,
+        dateMode INTEGER NOT NULL DEFAULT 0,
+        sortOrder INTEGER NOT NULL DEFAULT 0,
+        createdAt INTEGER,
+        updatedAt INTEGER,
+        deletedAt INTEGER
+      )
+    ''');
+    final cols =
+        await db.query('sqlite_master',
+            where: "type='table' AND name='lists'");
+    if (cols.isNotEmpty) {
+      final listCols = await db.rawQuery('PRAGMA table_info(lists)');
+      final hasPinned =
+          listCols.any((c) => c['name'] == 'isPinned');
+      if (!hasPinned) {
+        await db.execute(
+            'ALTER TABLE lists ADD COLUMN isPinned INTEGER NOT NULL DEFAULT 0');
+      }
+    }
+    // 已有主提醒迁入 reminders
+    final rows = await db.query('tasks',
+        columns: ['id', 'remindAt'],
+        where: 'remindAt IS NOT NULL AND deletedAt IS NULL');
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (final r in rows) {
+      await db.insert('reminders', {
+        'taskId': r['id'] as int,
+        'remindAt': r['remindAt'] as int,
+        'createdAt': now,
+        'updatedAt': now,
+      });
+    }
   }
 
   static Future<void> createTables(DatabaseExecutor db) async {
@@ -37,6 +97,7 @@ class AppDatabase {
         icon INTEGER NOT NULL DEFAULT 0,
         sortOrder INTEGER NOT NULL DEFAULT 0,
         isDefault INTEGER NOT NULL DEFAULT 0,
+        isPinned INTEGER NOT NULL DEFAULT 0,
         createdAt INTEGER,
         updatedAt INTEGER,
         deletedAt INTEGER
@@ -92,5 +153,31 @@ class AppDatabase {
     await db.execute('CREATE INDEX idx_tasks_dueDate ON tasks(dueDate)');
     await db.execute('CREATE INDEX idx_tasks_listId ON tasks(listId)');
     await db.execute('CREATE INDEX idx_subtasks_taskId ON subtasks(taskId)');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS reminders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        taskId INTEGER NOT NULL,
+        remindAt INTEGER NOT NULL,
+        createdAt INTEGER,
+        updatedAt INTEGER,
+        deletedAt INTEGER
+      )
+    ''');
+    await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_reminders_taskId ON reminders(taskId)');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS filters (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        listIds TEXT NOT NULL DEFAULT '[]',
+        tagIds TEXT NOT NULL DEFAULT '[]',
+        minPriority INTEGER NOT NULL DEFAULT 0,
+        dateMode INTEGER NOT NULL DEFAULT 0,
+        sortOrder INTEGER NOT NULL DEFAULT 0,
+        createdAt INTEGER,
+        updatedAt INTEGER,
+        deletedAt INTEGER
+      )
+    ''');
   }
 }

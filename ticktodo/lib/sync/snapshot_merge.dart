@@ -1,4 +1,6 @@
+import 'package:ticktodo/data/models/filter.dart';
 import 'package:ticktodo/data/models/list_model.dart';
+import 'package:ticktodo/data/models/reminder.dart';
 import 'package:ticktodo/data/models/subtask.dart';
 import 'package:ticktodo/data/models/tag.dart';
 import 'package:ticktodo/data/models/task.dart';
@@ -17,6 +19,10 @@ SyncSnapshot mergeSnapshots(SyncSnapshot local, SyncSnapshot remote) {
   final tags = _mergeById<Tag>(local.tags, remote.tags,
       (a, b) => (a.updatedAt ?? 0) >= (b.updatedAt ?? 0) ? a : b);
   final taskTags = _mergeLinks(local.taskTags, remote.taskTags);
+  final reminders =
+      _mergeById<Reminder>(local.reminders, remote.reminders, pickNewer);
+  final filters =
+      _mergeById<Filter>(local.filters, remote.filters, pickNewer);
   return SyncSnapshot(
     revision: local.revision > remote.revision ? local.revision : remote.revision,
     tasks: tasks,
@@ -24,7 +30,21 @@ SyncSnapshot mergeSnapshots(SyncSnapshot local, SyncSnapshot remote) {
     lists: lists,
     tags: tags,
     taskTags: taskTags,
+    reminders: reminders,
+    filters: filters,
   );
+}
+
+T pickNewer<T>(T a, T b) => _updatedAtOf(a) >= _updatedAtOf(b) ? a : b;
+
+int _updatedAtOf(dynamic item) {
+  if (item is Task) return item.updatedAt ?? 0;
+  if (item is Subtask) return item.updatedAt ?? 0;
+  if (item is ListModel) return item.updatedAt ?? 0;
+  if (item is Tag) return item.updatedAt ?? 0;
+  if (item is Reminder) return item.updatedAt ?? 0;
+  if (item is Filter) return item.updatedAt ?? 0;
+  return 0;
 }
 
 List<T> _mergeById<T>(List<T> local, List<T> remote, T Function(T a, T b) pick) {
@@ -45,6 +65,8 @@ List<T> _mergeById<T>(List<T> local, List<T> remote, T Function(T a, T b) pick) 
 }
 
 int? _idOf(dynamic item) {
+  if (item is Reminder) return item.id;
+  if (item is Filter) return item.id;
   if (item is Task) return item.id;
   if (item is Subtask) return item.id;
   if (item is ListModel) return item.id;

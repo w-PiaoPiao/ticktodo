@@ -5,9 +5,9 @@ import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/core/repeat_rule.dart';
 import 'package:ticktodo/data/models/subtask.dart';
 import 'package:ticktodo/data/models/task.dart';
+import 'package:ticktodo/features/detail/reminders_section.dart';
 import 'package:ticktodo/features/detail/subtask_section.dart';
 import 'package:ticktodo/features/detail/tag_section.dart';
-import 'package:ticktodo/notifications/notification_service.dart';
 import 'package:ticktodo/widgets/date_time_picker.dart';
 import 'package:ticktodo/widgets/priority_picker.dart';
 import 'package:ticktodo/widgets/repeat_picker.dart';
@@ -116,6 +116,22 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     if (mounted) Navigator.of(context).pop();
   }
 
+  /// 新建页未填写任何内容就退出 → 丢弃空任务（软删除进回收站）
+  bool get _isEmptyNew =>
+      widget.taskId == 0 &&
+      (_task == null ||
+          (_task!.title.trim().isEmpty && _task!.note.trim().isEmpty));
+
+  Future<void> _discardAndPop() async {
+    final t = _task;
+    if (t?.id != null) {
+      await ref.read(notificationServiceProvider).cancelReminder(t!.id!);
+      await ref.read(taskRepoProvider).softDeleteTask(t.id!);
+      bumpMutation(ref);
+    }
+    if (mounted) Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_loaded || _task == null) {
@@ -124,7 +140,13 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     final task = _task!;
     final theme = Theme.of(context);
 
-    return Scaffold(
+    return PopScope(
+      canPop: !_isEmptyNew,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _discardAndPop();
+      },
+      child: Scaffold(
       appBar: AppBar(
         title: const Text('任务详情'),
         actions: [
@@ -161,6 +183,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           ),
           const Divider(height: 24),
           DateTimeSection(task: task, onChanged: _save),
+          const Divider(height: 24),
+          RemindersSection(task: task, onChanged: () => bumpMutation(ref)),
           ListTile(
             dense: true,
             contentPadding: EdgeInsets.zero,
@@ -210,6 +234,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           SubtaskSection(taskId: task.id!),
           const SizedBox(height: 40),
         ],
+      ),
       ),
     );
   }

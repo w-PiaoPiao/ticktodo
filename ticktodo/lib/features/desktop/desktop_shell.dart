@@ -5,6 +5,8 @@ import 'dart:ui' as ui show AppExitType;
 import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/features/all/all_screen.dart';
 import 'package:ticktodo/features/calendar/calendar_screen.dart';
+import 'package:ticktodo/features/filters/filters_screen.dart';
+import 'package:ticktodo/features/matrix/matrix_screen.dart';
 import 'package:ticktodo/features/search/search_screen.dart';
 import 'package:ticktodo/features/settings/settings_screen.dart';
 import 'package:ticktodo/features/today/today_screen.dart';
@@ -28,12 +30,13 @@ class DesktopShell extends ConsumerStatefulWidget {
 class _DesktopShellState extends ConsumerState<DesktopShell> {
   int _index = 0;
 
-  static const _viewLabels = ['今天', '最近7天', '日历', '全部任务'];
+  static const _viewLabels = ['今天', '最近7天', '日历', '全部任务', '四象限'];
   static const _viewKeys = [
     LogicalKeyboardKey.digit1,
     LogicalKeyboardKey.digit2,
     LogicalKeyboardKey.digit3,
     LogicalKeyboardKey.digit4,
+    LogicalKeyboardKey.digit5,
   ];
 
   void _openQuickAdd() {
@@ -50,6 +53,12 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
   void _openTrash() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const TrashScreen()),
+    );
+  }
+
+  void _openFilters() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const FiltersScreen()),
     );
   }
 
@@ -153,6 +162,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
                 onSearch: _openSearch,
                 onOpenTrash: _openTrash,
                 onOpenSettings: _openSettings,
+                onOpenFilters: _openFilters,
               ),
               VerticalDivider(width: 1, thickness: 1, color: theme.dividerColor),
               Expanded(
@@ -163,6 +173,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
                     WeekScreen(desktopMode: true),
                     CalendarScreen(),
                     AllScreen(desktopMode: true),
+                    MatrixScreen(),
                   ],
                 ),
               ),
@@ -184,6 +195,7 @@ class _Sidebar extends ConsumerStatefulWidget {
     required this.onSearch,
     required this.onOpenTrash,
     required this.onOpenSettings,
+    required this.onOpenFilters,
   });
 
   final int selectedIndex;
@@ -192,6 +204,7 @@ class _Sidebar extends ConsumerStatefulWidget {
   final VoidCallback onSearch;
   final VoidCallback onOpenTrash;
   final VoidCallback onOpenSettings;
+  final VoidCallback onOpenFilters;
 
   @override
   ConsumerState<_Sidebar> createState() => _SidebarState();
@@ -252,6 +265,12 @@ class _SidebarState extends ConsumerState<_Sidebar> {
               selectedIcon: Icons.checklist,
               label: '全部任务',
             ),
+            _item(
+              index: 4,
+              icon: Icons.grid_view_outlined,
+              selectedIcon: Icons.grid_view,
+              label: '四象限',
+            ),
             if (lists.isNotEmpty) ...[
               _sectionHeader('清单'),
               Container(
@@ -291,6 +310,7 @@ class _SidebarState extends ConsumerState<_Sidebar> {
             const SizedBox(height: 6),
             _actionTile(Icons.add, '新建任务', widget.onQuickAdd),
             _actionTile(Icons.search, '搜索', widget.onSearch),
+            _actionTile(Icons.filter_alt_outlined, '智能清单', widget.onOpenFilters),
             _actionTile(Icons.delete_outline, '回收站', widget.onOpenTrash),
             _actionTile(Icons.settings_outlined, '设置 ⌘,', widget.onOpenSettings),
             const SizedBox(height: 10),
