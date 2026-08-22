@@ -235,6 +235,52 @@ void main() {
       expect(poms.length, 1);
     });
 
+    test('取消打卡后快照仍包含软删行（墓碑可同步）', () async {
+      await habits.upsertHabit(const Habit(name: '喝水'));
+      await habits.toggleCheck(1, '2026-08-22');
+      await habits.toggleCheck(1, '2026-08-22'); // 取消 → 软删
+
+      final snap = await buildSnapshot(appDb, 1);
+      expect(snap.habitChecks.length, 1);
+      expect(snap.habitChecks.first.isDeleted, isTrue);
+    });
+
+    test('软删习惯与其打卡记录均入快照', () async {
+      final id = (await habits.upsertHabit(const Habit(name: '冥想')))!;
+      await habits.toggleCheck(id, '2026-08-22');
+      await habits.softDeleteHabit(id);
+
+      final snap = await buildSnapshot(appDb, 1);
+      expect(snap.habits.single.isDeleted, isTrue);
+      expect(snap.habitChecks.single.isDeleted, isTrue);
+    });
+
+    test('多设备：A 取消打卡不被 B 的旧勾选覆盖', () async {
+      // 设备 A：建习惯 + 打卡，产出快照
+      await habits.upsertHabit(const Habit(name: '跑步'));
+      await habits.toggleCheck(1, '2026-08-22');
+      final snapA1 = await buildSnapshot(appDb, 10);
+
+      // 设备 B：应用 A 的快照
+      final appDbB =
+          await AppDatabase.open(inMemoryPath: inMemoryDatabasePath);
+      addTearDown(() => appDbB.db.close());
+      await applySnapshot(appDbB, snapA1);
+
+      // 设备 A：取消打卡（软删该行，updatedAt 更新）
+      await habits.toggleCheck(1, '2026-08-22');
+      final snapA2 = await buildSnapshot(appDb, 11);
+
+      // 设备 B：拉取合并后应用 → 取消状态必须保留
+      final snapB = await buildSnapshot(appDbB, 12);
+      final merged = mergeSnapshots(snapA2, snapB);
+      await applySnapshot(appDbB, merged);
+
+      final repoB = HabitRepository(appDbB);
+      expect(await repoB.isCheckedOn(1, '2026-08-22'), isFalse,
+          reason: '取消打卡应同步到设备 B，而不是被旧勾选覆盖');
+    });
+
     test('mergeSnapshots 按 updatedAt 合并习惯', () {
       final local = SyncSnapshot(revision: 1, tasks: const [], subtasks: const [], lists: const [], tags: const [], taskTags: const [], habits: [
         const Habit(id: 1, name: '本地新版', updatedAt: 10),

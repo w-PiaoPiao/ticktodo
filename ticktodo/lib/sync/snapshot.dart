@@ -115,14 +115,17 @@ Future<SyncSnapshot> buildSnapshot(
   final filters = await appDb.db
       .query('filters', where: 'deletedAt IS NULL')
       .then((rows) => rows.map(Filter.fromMap).toList());
+  // 习惯/打卡/番茄与 tasks 一致：全量入快照（含软删行）。
+  // 软删行充当墓碑：取消打卡、删除习惯等"负向操作"才能同步到其他设备，
+  // 否则远端旧数据会在合并时把本地删除操作覆盖回去（复活 bug）。
   final habits = await appDb.db
-      .query('habits', where: 'deletedAt IS NULL')
+      .query('habits')
       .then((rows) => rows.map(Habit.fromMap).toList());
   final habitChecks = await appDb.db
-      .query('habit_checks', where: 'deletedAt IS NULL')
+      .query('habit_checks')
       .then((rows) => rows.map(HabitCheck.fromMap).toList());
   final pomodoros = await appDb.db
-      .query('pomodoros', where: 'deletedAt IS NULL')
+      .query('pomodoros')
       .then((rows) => rows.map(PomodoroSession.fromMap).toList());
 
   final maxUpdated = <int?>[
