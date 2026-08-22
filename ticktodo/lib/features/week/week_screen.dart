@@ -17,7 +17,10 @@ final weekTasksProvider = FutureProvider<List<Task>>((ref) async {
 });
 
 class WeekScreen extends ConsumerWidget {
-  const WeekScreen({super.key});
+  const WeekScreen({super.key, this.desktopMode = false});
+
+  /// 桌面布局：隐藏移动端 FAB
+  final bool desktopMode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -41,11 +44,13 @@ class WeekScreen extends ConsumerWidget {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'fab-week',
-        onPressed: () => showQuickAdd(context),
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: desktopMode
+          ? null
+          : FloatingActionButton(
+              heroTag: 'fab-week',
+              onPressed: () => showQuickAdd(context),
+              child: const Icon(Icons.add),
+            ),
       body: TaskListView(
         tasks: tasks,
         emptyIcon: Icons.date_range,

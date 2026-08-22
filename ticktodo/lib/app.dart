@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ticktodo/core/providers.dart';
@@ -5,6 +6,7 @@ import 'package:ticktodo/core/theme.dart';
 import 'package:ticktodo/core/widget_bridge.dart';
 import 'package:ticktodo/features/all/all_screen.dart';
 import 'package:ticktodo/features/calendar/calendar_screen.dart';
+import 'package:ticktodo/features/desktop/desktop_shell.dart';
 import 'package:ticktodo/features/drawer/app_drawer.dart';
 import 'package:ticktodo/features/today/today_screen.dart';
 import 'package:ticktodo/features/week/week_screen.dart';
@@ -57,6 +59,18 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    // 桌面端（macOS/Windows/Linux）使用侧边栏外壳；移动端保持底部导航。
+    // 用 defaultTargetPlatform 而非 Platform，保证 widget 测试环境可覆盖。
+    final isDesktop = !kIsWeb &&
+        switch (defaultTargetPlatform) {
+          TargetPlatform.macOS ||
+          TargetPlatform.windows ||
+          TargetPlatform.linux => true,
+          _ => false,
+        };
+    if (isDesktop) {
+      return const DesktopShell();
+    }
     return Scaffold(
       drawer: AppDrawer(onNavigate: (i) => setState(() => _index = i)),
       body: IndexedStack(

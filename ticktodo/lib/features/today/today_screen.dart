@@ -19,7 +19,10 @@ final todayTasksProvider = FutureProvider<List<Task>>((ref) async {
 });
 
 class TodayScreen extends ConsumerWidget {
-  const TodayScreen({super.key});
+  const TodayScreen({super.key, this.desktopMode = false});
+
+  /// 桌面布局：隐藏移动端 FAB（新建走 Cmd+N / 侧边栏按钮）
+  final bool desktopMode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -53,11 +56,13 @@ class TodayScreen extends ConsumerWidget {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'fab-today',
-        onPressed: () => showQuickAdd(context, defaultDueDate: true),
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: desktopMode
+          ? null
+          : FloatingActionButton(
+              heroTag: 'fab-today',
+              onPressed: () => showQuickAdd(context, defaultDueDate: true),
+              child: const Icon(Icons.add),
+            ),
       body: TaskListView(
         tasks: tasks,
         emptyIcon: Icons.today,

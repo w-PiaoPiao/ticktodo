@@ -1,6 +1,10 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:ticktodo/app.dart';
 import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/data/db/app_database.dart';
@@ -11,6 +15,13 @@ import 'package:ticktodo/sync/sync_settings.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 桌面平台（macOS/Windows/Linux）sqflite 不支持插件通道，改用 FFI 实现
+  if (!kIsWeb &&
+      (Platform.isMacOS || Platform.isWindows || Platform.isLinux)) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
 
   final prefs = await SharedPreferences.getInstance();
   final settings = SyncSettings(prefs);

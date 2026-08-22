@@ -21,7 +21,12 @@ class NotificationService {
       // 时区获取失败时保持 UTC，不影响功能
     }
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const settings = InitializationSettings(android: android);
+    const darwin = DarwinInitializationSettings(
+      requestAlertPermission: false,
+      requestBadgePermission: false,
+      requestSoundPermission: false,
+    );
+    const settings = InitializationSettings(android: android, macOS: darwin);
     await _plugin.initialize(settings);
     _initialized = true;
   }
@@ -31,6 +36,10 @@ class NotificationService {
         AndroidFlutterLocalNotificationsPlugin>();
     await android?.requestNotificationsPermission();
     await android?.requestExactAlarmsPermission();
+    // iOS / macOS：弹窗申请提醒权限
+    final mac = _plugin.resolvePlatformSpecificImplementation<
+        MacOSFlutterLocalNotificationsPlugin>();
+    await mac?.requestPermissions(alert: true, badge: true, sound: true);
   }
 
   /// 调度任务提醒；remindAt 已过则取消并返回 false。

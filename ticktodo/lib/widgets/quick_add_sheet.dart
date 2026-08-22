@@ -7,8 +7,31 @@ import 'package:ticktodo/data/models/list_model.dart';
 import 'package:ticktodo/data/models/tag.dart';
 import 'package:ticktodo/data/models/task.dart';
 
-/// 弹出底部快速添加输入条。
-void showQuickAdd(BuildContext context, {bool defaultDueDate = false}) {
+/// 弹出快速添加：桌面端为居中模态对话框（macOS 规范），移动端为底部输入条。
+void showQuickAdd(
+  BuildContext context, {
+  bool defaultDueDate = false,
+  bool isFloatingOnDesktop = false,
+}) {
+  if (isFloatingOnDesktop) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Material(
+              color: Theme.of(context).colorScheme.surface,
+              child: QuickAddSheet(defaultDueDate: defaultDueDate),
+            ),
+          ),
+        ),
+      ),
+    );
+    return;
+  }
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,

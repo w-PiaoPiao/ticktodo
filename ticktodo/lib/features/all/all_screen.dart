@@ -13,7 +13,10 @@ final allTasksProvider = FutureProvider<List<Task>>((ref) async {
 });
 
 class AllScreen extends ConsumerStatefulWidget {
-  const AllScreen({super.key});
+  const AllScreen({super.key, this.desktopMode = false});
+
+  /// 桌面布局：隐藏移动端 FAB
+  final bool desktopMode;
 
   @override
   ConsumerState<AllScreen> createState() => _AllScreenState();
@@ -76,11 +79,13 @@ class _AllScreenState extends ConsumerState<AllScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'fab-all',
-        onPressed: () => showQuickAdd(context),
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: widget.desktopMode
+          ? null
+          : FloatingActionButton(
+              heroTag: 'fab-all',
+              onPressed: () => showQuickAdd(context),
+              child: const Icon(Icons.add),
+            ),
       body: TaskListView(
         tasks: filtered,
         emptyIcon: Icons.checklist,
