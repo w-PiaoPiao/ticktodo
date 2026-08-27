@@ -8,6 +8,8 @@ import 'package:ticktodo/data/db/app_database.dart';
 import 'package:ticktodo/data/repositories/meta_repository.dart';
 import 'package:ticktodo/data/repositories/task_repository.dart';
 import 'package:ticktodo/features/calendar/calendar_screen.dart';
+
+import 'support/test_app.dart';
 import 'package:ticktodo/features/calendar/month_grid.dart';
 
 class MockTaskRepo extends Mock implements TaskRepository {}
@@ -78,9 +80,7 @@ void main() {
       addTearDown(container.dispose);
       await tester.pumpWidget(UncontrolledProviderScope(
         container: container,
-        child: MaterialApp(
-          home: CalendarScreen(initialDate: initialDate),
-        ),
+        child: testApp(CalendarScreen(initialDate: initialDate)),
       ));
       await tester.pump(const Duration(milliseconds: 200));
     }

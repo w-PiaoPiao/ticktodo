@@ -4,6 +4,7 @@ import 'package:ticktodo/core/constants.dart';
 import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/data/models/habit.dart';
 import 'package:ticktodo/features/habits/habit_edit_sheet.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 import 'package:ticktodo/widgets/empty_state.dart';
 
 /// 习惯页：今日打卡列表 + 连续天数 + 本周进度 + 近 5 周热力图。
@@ -87,22 +88,23 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
   }
 
   Future<void> _delete(Habit h) async {
+    final l10n = AppLocalizations.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('删除习惯'),
-        content: Text('确定删除「${h.name}」吗？其打卡记录将一并隐藏，无法在界面恢复。'),
+        title: Text(l10n.habitDeleteTitle),
+        content: Text(l10n.habitDeleteConfirm(h.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
+            child: Text(l10n.commonCancel),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(ctx).colorScheme.error,
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除'),
+            child: Text(l10n.commonDelete),
           ),
         ],
       ),
@@ -116,13 +118,14 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final habits = _habits;
     return Scaffold(
       appBar: AppBar(
-        title: Text(_showArchived ? '已归档习惯' : '习惯'),
+        title: Text(_showArchived ? l10n.habitArchivedTitle : l10n.habitsTitle),
         actions: [
           IconButton(
-            tooltip: _showArchived ? '返回习惯列表' : '查看已归档',
+            tooltip: _showArchived ? l10n.habitBackToList : l10n.habitViewArchived,
             icon: Icon(_showArchived
                 ? Icons.repeat_one_outlined
                 : Icons.inventory_2_outlined),
@@ -148,10 +151,10 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
                   icon: _showArchived
                       ? Icons.inventory_2_outlined
                       : Icons.repeat_one_outlined,
-                  title: _showArchived ? '没有已归档的习惯' : '还没有习惯',
+                  title: _showArchived ? l10n.habitArchivedEmpty : l10n.habitEmpty,
                   subtitle: _showArchived
-                      ? '长按习惯卡片即可归档'
-                      : '点击右下角 + 创建第一个习惯',
+                      ? l10n.habitArchivedHint
+                      : l10n.habitCreateFirst,
                 )
               : RefreshIndicator(
                   onRefresh: _load,
@@ -177,8 +180,8 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
                         padding: const EdgeInsets.all(16),
                         child: Text(
                             _showArchived
-                                ? '通过卡片右侧菜单可恢复或删除习惯'
-                                : '长按卡片或使用卡片右侧菜单：归档 / 删除',
+                                ? l10n.habitArchivedTip
+                                : l10n.habitCardTip,
                             textAlign: TextAlign.center,
                             style: theme.textTheme.bodySmall
                                 ?.copyWith(color: theme.colorScheme.outline)),
@@ -223,6 +226,7 @@ class _HabitCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final color = Color(habit.color);
     return Card(
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
@@ -274,13 +278,13 @@ class _HabitCard extends StatelessWidget {
                     Chip(
                       avatar: const Icon(Icons.local_fire_department,
                           size: 15, color: Color(0xFFF29900)),
-                      label: Text('$streak 天',
+                      label: Text(l10n.habitStreakDays(streak),
                           style: theme.textTheme.labelSmall),
                       visualDensity: VisualDensity.compact,
                       backgroundColor: const Color(0x1AF29900),
                     ),
                   Chip(
-                    label: Text('本周 $weekCount/$_weeklyTarget',
+                    label: Text(l10n.habitWeekProgress(weekCount, _weeklyTarget),
                         style: theme.textTheme.labelSmall),
                     visualDensity: VisualDensity.compact,
                   ),
@@ -301,9 +305,10 @@ class _HabitCard extends StatelessWidget {
   }
 
   Widget _cardMenu(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return PopupMenuButton<String>(
       icon: const Icon(Icons.more_vert, size: 20),
-      tooltip: '更多操作',
+      tooltip: l10n.habitMoreTooltip,
       onSelected: (action) {
         switch (action) {
           case 'archive':
@@ -319,7 +324,7 @@ class _HabitCard extends StatelessWidget {
             leading: Icon(habit.archived
                 ? Icons.unarchive_outlined
                 : Icons.archive_outlined),
-            title: Text(habit.archived ? '恢复到列表' : '归档'),
+            title: Text(habit.archived ? l10n.habitRestore : l10n.habitArchive),
             dense: true,
             contentPadding: EdgeInsets.zero,
           ),
@@ -329,7 +334,7 @@ class _HabitCard extends StatelessWidget {
           child: ListTile(
             leading: Icon(Icons.delete_outline,
                 color: Theme.of(context).colorScheme.error),
-            title: Text('删除',
+            title: Text(l10n.commonDelete,
                 style: TextStyle(
                     color: Theme.of(context).colorScheme.error)),
             dense: true,

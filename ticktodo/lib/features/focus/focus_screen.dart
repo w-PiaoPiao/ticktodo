@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/data/models/habit.dart' show PomodoroSession;
 import 'package:ticktodo/data/models/task.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 
 /// 番茄专注：25 分钟专注 + 5 分钟短休，每 4 轮一次 15 分钟长休。
 ///
@@ -58,12 +59,12 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
     super.dispose();
   }
 
-  String get _endTitle =>
-      _phase == _Phase.breakTime ? '休息结束' : '专注完成';
+  String _endTitle(AppLocalizations l10n) =>
+      _phase == _Phase.breakTime ? l10n.focusEndBreak : l10n.focusEndFocus;
 
-  String get _endBody => _phase == _Phase.breakTime
-      ? '休息结束，继续加油！'
-      : '番茄结束，休息一下吧 🎉';
+  String _endBody(AppLocalizations l10n) => _phase == _Phase.breakTime
+      ? l10n.focusEndBreakBody
+      : l10n.focusEndFocusBody;
 
   void _startFocus() {
     setState(() {
@@ -98,9 +99,10 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
   /// 用系统调度而非 Future.delayed：后者在移动端挂起后不执行导致
   /// 后台到点不通知，且暂停后 stale 回调会在错误时刻弹通知。
   void _scheduleEndNotification() {
+    final l10n = AppLocalizations.of(context);
     ref.read(notificationServiceProvider).schedulePomodoroEnd(
-          title: _endTitle,
-          body: _endBody,
+          title: _endTitle(l10n),
+          body: _endBody(l10n),
           at: DateTime.now().add(Duration(seconds: _remaining)),
         );
   }
@@ -140,8 +142,9 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
       });
       _refreshStats();
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('🍅 第 $_finishedFocusCount 个番茄完成！'),
+          content: Text(l10n.focusCompleted(_finishedFocusCount)),
           duration: const Duration(seconds: 3),
         ));
       }
@@ -212,8 +215,9 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('番茄专注')),
+      appBar: AppBar(title: Text(l10n.focusTitle)),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -272,19 +276,19 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
                   FilledButton.icon(
                     onPressed: _startFocus,
                     icon: const Icon(Icons.play_arrow),
-                    label: const Text('开始专注'),
+                    label: Text(l10n.focusStart),
                   )
                 else ...[
                   OutlinedButton.icon(
                     onPressed: _running ? _pauseResume : _pauseResume,
                     icon: Icon(_running ? Icons.pause : Icons.play_arrow),
-                    label: Text(_running ? '暂停' : '继续'),
+                    label: Text(_running ? l10n.focusPause : l10n.focusResume),
                   ),
                   const SizedBox(width: 12),
                   OutlinedButton.icon(
                     onPressed: _giveUp,
                     icon: const Icon(Icons.stop),
-                    label: const Text('放弃'),
+                    label: Text(l10n.focusGiveUp),
                   ),
                 ],
               ],
@@ -292,7 +296,7 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
             const SizedBox(height: 16),
             if (_phase == _Phase.idle) _taskPicker(theme),
             const SizedBox(height: 8),
-            Text('已完成 $_finishedFocusCount 个番茄 · 今日统计见下方',
+            Text(l10n.focusSummary(_finishedFocusCount),
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.outline)),
             _todayStats(theme),
@@ -303,10 +307,11 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
   }
 
   Widget _phaseLabel(ThemeData theme) {
+    final l10n = AppLocalizations.of(context);
     final text = switch (_phase) {
-      _Phase.idle => '准备就绪',
-      _Phase.focus => '专注中',
-      _Phase.breakTime => '休息中',
+      _Phase.idle => l10n.focusIdle,
+      _Phase.focus => l10n.focusRunning,
+      _Phase.breakTime => l10n.focusBreak,
     };
     return Chip(
       label: Text(text),
@@ -319,6 +324,7 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
   }
 
   Widget _taskPicker(ThemeData theme) {
+    final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: FutureBuilder<List<Task>>(
@@ -329,7 +335,7 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
             initialValue: _selectedTask,
             isExpanded: true,
             decoration: InputDecoration(
-              labelText: '关联任务（可选）',
+              labelText: l10n.focusTaskLabel,
               border: const OutlineInputBorder(),
               isDense: true,
               suffixIcon: _selectedTask == null
@@ -340,11 +346,11 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
                     ),
             ),
             items: [
-              const DropdownMenuItem(value: null, child: Text('不关联')),
+              DropdownMenuItem(value: null, child: Text(l10n.focusNoTask)),
               for (final t in tasks.take(50))
                 DropdownMenuItem(
                     value: t,
-                    child: Text(t.title.isEmpty ? '无标题任务' : t.title,
+                    child: Text(t.title.isEmpty ? l10n.untitledTask : t.title,
                         maxLines: 1, overflow: TextOverflow.ellipsis)),
             ],
             onChanged: (v) => setState(() => _selectedTask = v),
@@ -355,13 +361,14 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
   }
 
   Widget _todayStats(ThemeData theme) {
+    final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.only(top: 4),
       child: FutureBuilder<List<int>>(
         future: _statsFuture,
         builder: (_, snap) {
           final data = snap.data ?? const [0, 0];
-          return Text('今日 ${data[0]} 个番茄 · 累计专注 ${data[1]} 分钟',
+          return Text(l10n.focusTodayStats(data[0], data[1]),
               style: theme.textTheme.labelLarge);
         },
       ),

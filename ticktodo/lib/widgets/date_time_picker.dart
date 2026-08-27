@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:ticktodo/core/constants.dart';
 import 'package:ticktodo/data/models/task.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 
 /// 任务详情页的日期/时间/提醒选择区
 class DateTimeSection extends StatefulWidget {
@@ -68,15 +68,16 @@ class _DateTimeSectionState extends State<DateTimeSection> {
   }
 
   Future<void> _pickReminder() async {
+    final l10n = AppLocalizations.of(context);
     final options = <String, int?>{
-      '不提醒': null,
-      '到期时间': 0,
-      '提前 5 分钟': -5,
-      '提前 15 分钟': -15,
-      '提前 30 分钟': -30,
-      '提前 1 小时': -60,
-      '提前 1 天': -24 * 60,
-      '自定义时间': -999,
+      l10n.dateNoReminder: null,
+      l10n.dateAtDue: 0,
+      l10n.dateAhead5m: -5,
+      l10n.dateAhead15m: -15,
+      l10n.dateAhead30m: -30,
+      l10n.dateAhead1h: -60,
+      l10n.dateAhead1d: -24 * 60,
+      l10n.dateCustomTime: -999,
     };
     final selected = await showModalBottomSheet<String>(
       context: context,
@@ -97,6 +98,7 @@ class _DateTimeSectionState extends State<DateTimeSection> {
       ),
     );
     if (selected == null) return;
+    if (!mounted) return;
 
     final offsetMin = options[selected];
     if (offsetMin == null) {
@@ -118,11 +120,13 @@ class _DateTimeSectionState extends State<DateTimeSection> {
         lastDate: DateTime(2100),
       );
       if (picked == null) return;
+      if (!mounted) return;
       final t = await showTimePicker(
         context: context,
         initialTime: TimeOfDay(hour: picked.hour, minute: picked.minute),
       );
       if (t == null) return;
+      if (!mounted) return;
       final remindDt = DateTime(picked.year, picked.month, picked.day, t.hour, t.minute);
       widget.onChanged(
           widget.task.copyWith(remindAt: remindDt.millisecondsSinceEpoch));
@@ -141,7 +145,7 @@ class _DateTimeSectionState extends State<DateTimeSection> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final overdue = widget.task.dueDate != null &&
         isOverdue(widget.task.dueDate!);
 
@@ -152,8 +156,8 @@ class _DateTimeSectionState extends State<DateTimeSection> {
           leading: const Icon(Icons.calendar_today_outlined, size: 20),
           title: Text(
             widget.task.dueDate == null
-                ? '添加日期'
-                : dateBadge(widget.task.dueDate!),
+                ? l10n.dateAddDate
+                : dateBadge(widget.task.dueDate!, l10n),
             style: TextStyle(
               color: overdue ? const Color(AppColors.overDueRed) : null,
             ),
@@ -170,7 +174,7 @@ class _DateTimeSectionState extends State<DateTimeSection> {
         ListTile(
           dense: true,
           leading: const Icon(Icons.access_time, size: 20),
-          title: Text(widget.task.dueTime == null ? '添加时间' : widget.task.dueTime!),
+          title: Text(widget.task.dueTime == null ? l10n.dateAddTime : widget.task.dueTime!),
           trailing: widget.task.dueTime == null
               ? null
               : IconButton(
@@ -185,8 +189,8 @@ class _DateTimeSectionState extends State<DateTimeSection> {
           leading: const Icon(Icons.notifications_none, size: 20),
           title: Text(
             widget.task.remindAt == null
-                ? '提醒我'
-                : DateFormat('MM月dd日 HH:mm')
+                ? l10n.dateRemindMe
+                : DateFormat(l10n.remindersFormatMd)
                     .format(DateTime.fromMillisecondsSinceEpoch(widget.task.remindAt!)),
           ),
           trailing: widget.task.remindAt == null

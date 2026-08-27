@@ -9,6 +9,7 @@ import 'package:ticktodo/features/search/search_screen.dart';
 import 'package:ticktodo/features/settings/settings_screen.dart';
 import 'package:ticktodo/features/tags/tags_screen.dart';
 import 'package:ticktodo/features/trash/trash_screen.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 
 class AppDrawer extends ConsumerWidget {
   const AppDrawer({super.key, this.onNavigate});
@@ -19,6 +20,7 @@ class AppDrawer extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final lists = ref.watch(listsProvider).valueOrNull ?? const [];
     final sync = ref.read(syncManagerProvider);
     final settings = ref.read(syncSettingsProvider);
@@ -40,13 +42,13 @@ class AppDrawer extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('滴答清单Pro',
+                        Text(l10n.appTitle,
                             style: theme.textTheme.titleLarge
                                 ?.copyWith(fontWeight: FontWeight.bold)),
                         Text(
                           settings.hasCredentials
-                              ? (syncOk ? '坚果云已同步' : '坚果云未连接')
-                              : '未配置同步',
+                              ? (syncOk ? l10n.kvSyncOk : l10n.kvSyncDown)
+                              : l10n.kvSyncNone,
                           style: theme.textTheme.bodySmall
                               ?.copyWith(color: theme.colorScheme.outline),
                         ),
@@ -59,7 +61,7 @@ class AppDrawer extends ConsumerWidget {
             const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.today_outlined),
-              title: const Text('今天'),
+              title: Text(l10n.navToday),
               onTap: () {
                 Navigator.pop(context);
                 onNavigate?.call(0);
@@ -67,7 +69,7 @@ class AppDrawer extends ConsumerWidget {
             ),
             ListTile(
               leading: const Icon(Icons.date_range_outlined),
-              title: const Text('最近7天'),
+              title: Text(l10n.navWeek),
               onTap: () {
                 Navigator.pop(context);
                 onNavigate?.call(1);
@@ -75,7 +77,7 @@ class AppDrawer extends ConsumerWidget {
             ),
             ListTile(
               leading: const Icon(Icons.calendar_month_outlined),
-              title: const Text('日历'),
+              title: Text(l10n.navCalendar),
               onTap: () {
                 Navigator.pop(context);
                 onNavigate?.call(2);
@@ -83,7 +85,7 @@ class AppDrawer extends ConsumerWidget {
             ),
             ListTile(
               leading: const Icon(Icons.checklist_outlined),
-              title: const Text('全部任务'),
+              title: Text(l10n.navAllTasks),
               onTap: () {
                 Navigator.pop(context);
                 onNavigate?.call(3);
@@ -94,7 +96,7 @@ class AppDrawer extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
               child: Row(
                 children: [
-                  Text('清单',
+                  Text(l10n.navLists,
                       style: theme.textTheme.labelMedium
                           ?.copyWith(color: theme.colorScheme.outline)),
                   const Spacer(),
@@ -119,42 +121,42 @@ class AppDrawer extends ConsumerWidget {
               ),
             ListTile(
               leading: const Icon(Icons.label_outline),
-              title: const Text('标签管理'),
+              title: Text(l10n.navTags),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const TagsScreen()),
               ),
             ),
             ListTile(
               leading: const Icon(Icons.filter_alt_outlined),
-              title: const Text('智能清单'),
+              title: Text(l10n.navFilters),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const FiltersScreen()),
               ),
             ),
             ListTile(
               leading: const Icon(Icons.repeat_one_outlined),
-              title: const Text('习惯打卡'),
+              title: Text(l10n.navHabits),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const HabitsScreen()),
               ),
             ),
             ListTile(
               leading: const Icon(Icons.timer_outlined),
-              title: const Text('番茄专注'),
+              title: Text(l10n.navFocus),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const FocusScreen()),
               ),
             ),
             ListTile(
               leading: const Icon(Icons.search),
-              title: const Text('搜索任务'),
+              title: Text(l10n.navSearch),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const SearchScreen()),
               ),
             ),
             ListTile(
               leading: const Icon(Icons.delete_outline),
-              title: const Text('回收站'),
+              title: Text(l10n.navTrash),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const TrashScreen()),
               ),
@@ -162,7 +164,7 @@ class AppDrawer extends ConsumerWidget {
             const Divider(),
             ListTile(
               leading: const Icon(Icons.settings_outlined),
-              title: const Text('设置'),
+              title: Text(l10n.navSettings),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const SettingsScreen()),
               ),

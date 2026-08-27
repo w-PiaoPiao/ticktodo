@@ -7,6 +7,7 @@ import 'package:ticktodo/data/models/tag.dart';
 import 'package:ticktodo/data/models/task.dart';
 import 'package:ticktodo/features/detail/task_detail_screen.dart';
 import 'package:ticktodo/features/shared/task_list_view.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 import 'package:ticktodo/widgets/empty_state.dart';
 
 /// 智能清单（自定义过滤器）管理页。
@@ -40,14 +41,15 @@ class _FiltersScreenState extends ConsumerState<FiltersScreen> {
   }
 
   Future<void> _delete(Filter f) async {
+    final l10n = AppLocalizations.of(context);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('删除智能清单'),
-        content: Text('确定删除「${f.name}」吗？'),
+        title: Text(l10n.filterDeleteTitle),
+        content: Text(l10n.filterDeleteConfirm(f.name)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('删除')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.commonCancel)),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(l10n.commonDelete)),
         ],
       ),
     );
@@ -59,9 +61,10 @@ class _FiltersScreenState extends ConsumerState<FiltersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final filters = _filters;
     return Scaffold(
-      appBar: AppBar(title: const Text('智能清单')),
+      appBar: AppBar(title: Text(l10n.filterTitle)),
       floatingActionButton: FloatingActionButton(
         heroTag: 'fab-filters',
         onPressed: () => _openEditor(),
@@ -72,8 +75,8 @@ class _FiltersScreenState extends ConsumerState<FiltersScreen> {
           : filters.isEmpty
               ? EmptyState(
                   icon: Icons.filter_alt_outlined,
-                  title: '还没有智能清单',
-                  subtitle: '按清单/标签/优先级/日期组合创建',
+                  title: l10n.filterEmpty,
+                  subtitle: l10n.filterEmptyHint,
                 )
               : ListView(
                   children: [
@@ -82,11 +85,11 @@ class _FiltersScreenState extends ConsumerState<FiltersScreen> {
                         key: ValueKey('filter-${f.id}'),
                         leading: const Icon(Icons.filter_alt),
                         title: Text(f.name),
-                        subtitle: Text(_describe(f),
+                        subtitle: Text(_describe(f, l10n),
                             style: Theme.of(context).textTheme.bodySmall),
                         trailing: IconButton(
                           icon: const Icon(Icons.delete_outline, size: 20),
-                          tooltip: '删除',
+                          tooltip: l10n.filterDeleteTooltip,
                           onPressed: () => _delete(f),
                         ),
                         onTap: () => Navigator.of(context).push(
@@ -99,18 +102,32 @@ class _FiltersScreenState extends ConsumerState<FiltersScreen> {
     );
   }
 
-  String _describe(Filter f) {
+  String _describe(Filter f, AppLocalizations l10n) {
     final parts = <String>[];
-    if (f.listIds.isNotEmpty) parts.add('${f.listIds.length} 个清单');
-    if (f.tagIds.isNotEmpty) parts.add('${f.tagIds.length} 个标签');
+    if (f.listIds.isNotEmpty) parts.add(l10n.filterCountLists(f.listIds.length));
+    if (f.tagIds.isNotEmpty) parts.add(l10n.filterCountTags(f.tagIds.length));
     if (f.minPriority > 0) {
-      parts.add(
-          '${switch (f.minPriority) { 3 => '高', 2 => '中以上', _ => '低以上' }}优先级');
+      final label = switch (f.minPriority) {
+        3 => l10n.filterPriorityHigh,
+        2 => l10n.filterPriorityAboveMedium,
+        _ => l10n.filterPriorityAboveLow,
+      };
+      parts.add('$label${l10n.filterPrioritySuffix}');
     }
-    if (f.dateMode != FilterDateMode.any) parts.add(f.dateMode.label);
-    return parts.isEmpty ? '全部未完成任务' : parts.join(' · ');
+    if (f.dateMode != FilterDateMode.any) {
+      parts.add(_dateModeLabel(f.dateMode, l10n));
+    }
+    return parts.isEmpty ? l10n.filterAllOpen : parts.join(' · ');
   }
 }
+
+String _dateModeLabel(FilterDateMode m, AppLocalizations l10n) => switch (m) {
+      FilterDateMode.today => l10n.filterDateToday,
+      FilterDateMode.week => l10n.filterDateWeek,
+      FilterDateMode.overdue => l10n.filterDateOverdue,
+      FilterDateMode.noDate => l10n.filterDateNoDate,
+      FilterDateMode.any => l10n.filterDateAny,
+    };
 
 // ---------- 编辑页 ----------
 
@@ -174,11 +191,15 @@ class _FilterEditScreenState extends ConsumerState<FilterEditScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.existing == null ? '新建智能清单' : '编辑智能清单'),
+        title: Text(widget.existing == null ? l10n.filterNew : l10n.filterEdit),
         actions: [
-          IconButton(icon: const Icon(Icons.check), tooltip: '保存', onPressed: _save),
+          IconButton(
+              icon: const Icon(Icons.check),
+              tooltip: l10n.filterSaveTooltip,
+              onPressed: _save),
         ],
       ),
       body: ListView(
@@ -186,13 +207,13 @@ class _FilterEditScreenState extends ConsumerState<FilterEditScreen> {
         children: [
           TextField(
             controller: _name,
-            decoration: const InputDecoration(
-              labelText: '名称',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: l10n.filterNameLabel,
+              border: const OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 16),
-          Text('清单（不选=全部）', style: theme.textTheme.labelMedium),
+          Text(l10n.filterListsLabel, style: theme.textTheme.labelMedium),
           Wrap(
             spacing: 6,
             children: [
@@ -206,7 +227,7 @@ class _FilterEditScreenState extends ConsumerState<FilterEditScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          Text('标签（不选=不限）', style: theme.textTheme.labelMedium),
+          Text(l10n.filterTagsLabel, style: theme.textTheme.labelMedium),
           Wrap(
             spacing: 6,
             children: [
@@ -220,11 +241,16 @@ class _FilterEditScreenState extends ConsumerState<FilterEditScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          Text('最低优先级', style: theme.textTheme.labelMedium),
+          Text(l10n.filterMinPriority, style: theme.textTheme.labelMedium),
           Wrap(
             spacing: 6,
             children: [
-              for (final (v, label) in [(0, '不限'), (1, '低以上'), (2, '中以上'), (3, '仅高')])
+              for (final (v, label) in [
+                (0, l10n.commonNone),
+                (1, l10n.filterPriorityAboveLow),
+                (2, l10n.filterPriorityAboveMedium),
+                (3, l10n.filterPriorityHigh),
+              ])
                 ChoiceChip(
                   label: Text(label),
                   selected: _minPriority == v,
@@ -233,13 +259,13 @@ class _FilterEditScreenState extends ConsumerState<FilterEditScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          Text('日期范围', style: theme.textTheme.labelMedium),
+          Text(l10n.filterDateRange, style: theme.textTheme.labelMedium),
           Wrap(
             spacing: 6,
             children: [
               for (final m in FilterDateMode.values)
                 ChoiceChip(
-                  label: Text(m.label),
+                  label: Text(_dateModeLabel(m, l10n)),
                   selected: _dateMode == m,
                   onSelected: (_) => setState(() => _dateMode = m),
                 ),
@@ -289,7 +315,7 @@ class _FilterResultScreenState extends ConsumerState<FilterResultScreen> {
           : TaskListView(
               tasks: tasks,
               emptyIcon: Icons.filter_alt_outlined,
-              emptyTitle: '没有符合条件的任务',
+              emptyTitle: AppLocalizations.of(context).filterResultEmpty,
               onTapTask: (t) => Navigator.of(context).push(
                 MaterialPageRoute(
                     builder: (_) => TaskDetailScreen(taskId: t.id ?? 0)),

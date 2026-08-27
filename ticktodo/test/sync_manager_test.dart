@@ -15,6 +15,8 @@ import 'package:ticktodo/sync/sync_manager.dart';
 import 'package:ticktodo/sync/sync_settings.dart';
 import 'package:ticktodo/sync/webdav_client.dart';
 
+import 'support/in_memory_credential_store.dart';
+
 void main() {
   late AppDatabase appDb;
   late TaskRepository repo;
@@ -27,13 +29,14 @@ void main() {
   });
 
   setUp(() async {
-    SharedPreferences.setMockInitialValues({
-      'webdav_url': 'https://dav.jianguoyun.com/dav/',
-      'webdav_user': 'u@example.com',
-      'webdav_pass': 'apppass',
-    });
+    SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
-    settings = SyncSettings(prefs);
+    final store = InMemoryCredentialStore();
+    await store.write('webdav_url', 'https://dav.jianguoyun.com/dav/');
+    await store.write('webdav_user', 'u@example.com');
+    await store.write('webdav_pass', 'apppass');
+    settings = SyncSettings(prefs, store);
+    await settings.load();
     appDb = await AppDatabase.open(inMemoryPath: inMemoryDatabasePath);
     repo = TaskRepository(appDb);
     requests = [];
@@ -132,7 +135,7 @@ void main() {
     expect((await repo.queryAll()).single.title, '本地任务');
   });
 
-  test('凭据持久化', () async {
+  test('凭据持久化（setCredentials 写入安全存储并更新内存缓存）', () async {
     await settings.setCredentials('https://dav.jianguoyun.com/dav/', 'new@u', 'newpass');
     expect(settings.webdavUrl, 'https://dav.jianguoyun.com/dav/');
     expect(settings.username, 'new@u');
@@ -143,12 +146,65 @@ void main() {
   test('无凭据 → 跳过同步', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
-    final emptySettings = SyncSettings(prefs);
+    final emptySettings = SyncSettings(prefs, InMemoryCredentialStore());
+    await emptySettings.load();
     final m = SyncManager(
         appDb: appDb, taskRepository: repo, settings: emptySettings);
     final result = await m.syncNow();
     expect(result.success, true);
     expect(result.didUpload, false);
     expect(requests, isEmpty);
+  });
+
+  test('migrateLegacyPrefs：旧明文凭据迁入安全存储并清除 prefs', () async {
+    SharedPreferences.setMockInitialValues({
+      'webdav_url': 'https://legacy.example.com/dav/',
+      'webdav_user': 'legacy@u',
+      'webdav_pass': 'legacypass',
+    });
+    final prefs = await SharedPreferences.getInstance();
+    final store = InMemoryCredentialStore();
+    final s = SyncSettings(prefs, store);
+    await s.migrateLegacyPrefs();
+
+    expect(await store.read('webdav_url'), 'https://legacy.example.com/dav/');
+    expect(await store.read('webdav_user'), 'legacy@u');
+    expect(await store.read('webdav_pass'), 'legacypass');
+    expect(s.webdavUrl, 'https://legacy.example.com/dav/');
+    expect(s.hasCredentials, isTrue);
+    expect(prefs.getString('webdav_url'), isNull);
+    expect(prefs.getString('webdav_pass'), isNull);
+  });
+
+  test('migrateLegacyPrefs：安全存储已有凭据时以安全存储为准', () async {
+    SharedPreferences.setMockInitialValues({
+      'webdav_url': 'https://old.example.com/dav/',
+      'webdav_user': 'old@u',
+      'webdav_pass': 'oldpass',
+    });
+    final prefs = await SharedPreferences.getInstance();
+    final store = InMemoryCredentialStore();
+    await store.write('webdav_url', 'https://secure.example.com/dav/');
+    await store.write('webdav_user', 'secure@u');
+    await store.write('webdav_pass', 'securepass');
+    final s = SyncSettings(prefs, store);
+    await s.load();
+    await s.migrateLegacyPrefs();
+
+    expect(s.webdavUrl, 'https://secure.example.com/dav/');
+    expect(prefs.getString('webdav_url'), isNull);
+  });
+
+  test('refreshClient：换绑后 client 使用新凭据', () async {
+    final m = managerWith(noBackupServer());
+    expect(m.client!.username, 'u@example.com');
+
+    await settings.setCredentials(
+        'https://dav.jianguoyun.com/dav/', 'swapped@u', 'newpass');
+    m.refreshClient();
+
+    expect(m.client, isNotNull);
+    expect(m.client!.username, 'swapped@u');
+    expect(m.client!.password, 'newpass');
   });
 }

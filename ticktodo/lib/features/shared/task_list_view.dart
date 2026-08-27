@@ -4,6 +4,7 @@ import 'package:ticktodo/core/constants.dart';
 import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/data/models/list_model.dart';
 import 'package:ticktodo/data/models/task.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 import 'package:ticktodo/widgets/empty_state.dart';
 import 'package:ticktodo/widgets/task_tile.dart';
 
@@ -37,7 +38,34 @@ class TaskListView extends ConsumerStatefulWidget {
 class _TaskListViewState extends ConsumerState<TaskListView> {
   final Set<int> _selectedIds = {};
 
+  /// 排序结果缓存：tasks 变化时才重算（避免每次 build 全量排序）。
+  List<Task> _open = const [];
+  List<Task> _done = const [];
+
   bool get _selecting => _selectedIds.isNotEmpty;
+
+  void _recompute() {
+    final tasks = widget.tasks;
+    _open = tasks.where((t) => !t.completed).toList()
+      ..sort((a, b) {
+        final p = b.priority.value.compareTo(a.priority.value);
+        if (p != 0) return p;
+        return (a.dueDate ?? '9999').compareTo(b.dueDate ?? '9999');
+      });
+    _done = tasks.where((t) => t.completed).toList();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _recompute();
+  }
+
+  @override
+  void didUpdateWidget(covariant TaskListView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.tasks, widget.tasks)) _recompute();
+  }
 
   void _toggleSelect(int id) {
     setState(() {
@@ -55,19 +83,20 @@ class _TaskListViewState extends ConsumerState<TaskListView> {
   Future<void> _bulkDelete() async {
     final ids = _selectedIds.toList();
     if (ids.isEmpty) return;
+    final l10n = AppLocalizations.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('删除 ${ids.length} 个任务'),
-        content: const Text('删除后可在回收站恢复。'),
+        title: Text(l10n.multiDeleteTitle(ids.length)),
+        content: Text(l10n.multiDeleteRestorable),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
+            child: Text(l10n.commonCancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除'),
+            child: Text(l10n.commonDelete),
           ),
         ],
       ),
@@ -79,6 +108,7 @@ class _TaskListViewState extends ConsumerState<TaskListView> {
   Future<void> _bulkMove() async {
     final ids = _selectedIds.toList();
     if (ids.isEmpty) return;
+    final l10n = AppLocalizations.of(context);
     final lists = widget.lists ?? ref.read(listsProvider).valueOrNull ?? [];
     if (lists.isEmpty) return;
     final target = await showModalBottomSheet<int>(
@@ -90,7 +120,7 @@ class _TaskListViewState extends ConsumerState<TaskListView> {
           children: [
             Padding(
               padding: const EdgeInsets.all(12),
-              child: Text('移动到清单',
+              child: Text(l10n.multiMoveTo,
                   style: Theme.of(ctx).textTheme.titleMedium),
             ),
             for (final l in lists)
@@ -121,12 +151,14 @@ class _TaskListViewState extends ConsumerState<TaskListView> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(title: const Text('今天'), onTap: () => Navigator.pop(ctx, today)),
             ListTile(
-                title: const Text('明天'),
+                title: Text(AppLocalizations.of(ctx).commonToday),
+                onTap: () => Navigator.pop(ctx, today)),
+            ListTile(
+                title: Text(AppLocalizations.of(ctx).commonTomorrow),
                 onTap: () => Navigator.pop(ctx, tomorrow)),
             ListTile(
-              title: const Text('选择日期…'),
+              title: Text(AppLocalizations.of(ctx).multiPickDate),
               onTap: () async {
                 final d = await showDatePicker(
                   context: ctx,
@@ -160,13 +192,8 @@ class _TaskListViewState extends ConsumerState<TaskListView> {
       return null;
     }
 
-    final open = tasks.where((t) => !t.completed).toList()
-      ..sort((a, b) {
-        final p = b.priority.value.compareTo(a.priority.value);
-        if (p != 0) return p;
-        return (a.dueDate ?? '9999').compareTo(b.dueDate ?? '9999');
-      });
-    final done = tasks.where((t) => t.completed).toList();
+    final open = _open;
+    final done = _done;
 
     Widget buildTile(Task t) {
       return TaskTile(
@@ -198,21 +225,38 @@ class _TaskListViewState extends ConsumerState<TaskListView> {
     return Column(
       children: [
         Expanded(
-          child: ListView(
-            children: [
-              ...open.map(buildTile),
-              if (open.isNotEmpty && done.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-                  child: Text(
-                    '已完成 ${done.length}',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.outline,
-                        ),
-                  ),
-                ),
-              if (done.isNotEmpty && widget.showCompleted) ...done.map(buildTile),
-            ],
+          child: ListView.builder(
+            itemCount: open.length +
+                (open.isNotEmpty && done.isNotEmpty && widget.showCompleted
+                    ? 1
+                    : 0) +
+                (done.isNotEmpty && widget.showCompleted ? done.length : 0),
+            itemBuilder: (context, index) {
+              // 行模型：先未完成区，再「已完成 N」标题，再已完成区
+              if (index < open.length) return buildTile(open[index]);
+              var rest = index - open.length;
+              if (open.isNotEmpty &&
+                  done.isNotEmpty &&
+                  widget.showCompleted) {
+                if (rest == 0) {
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                    child: Text(
+                      AppLocalizations.of(context)
+                          .multiCompletedCount(done.length),
+                      style: Theme.of(context)
+                          .textTheme
+                          .labelMedium
+                          ?.copyWith(
+                            color: Theme.of(context).colorScheme.outline,
+                          ),
+                    ),
+                  );
+                }
+                rest -= 1;
+              }
+              return buildTile(done[rest]);
+            },
           ),
         ),
         if (_selecting)
@@ -250,6 +294,7 @@ class _MultiSelectBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return SafeArea(
       top: false,
       child: Container(
@@ -263,19 +308,25 @@ class _MultiSelectBar extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             IconButton(
-                tooltip: '全选', icon: const Icon(Icons.select_all), onPressed: onSelectAll),
+                tooltip: l10n.multiSelectAll,
+                icon: const Icon(Icons.select_all),
+                onPressed: onSelectAll),
             IconButton(
-                tooltip: '移动到清单',
+                tooltip: l10n.multiMoveTo,
                 icon: const Icon(Icons.drive_file_move_outline),
                 onPressed: onMove),
             IconButton(
-                tooltip: '设置日期', icon: const Icon(Icons.event), onPressed: onSetDate),
+                tooltip: l10n.multiSetDate,
+                icon: const Icon(Icons.event),
+                onPressed: onSetDate),
             IconButton(
-                tooltip: '删除',
+                tooltip: l10n.commonDelete,
                 icon: const Icon(Icons.delete_outline),
                 onPressed: onDelete),
             IconButton(
-                tooltip: '取消多选', icon: const Icon(Icons.close), onPressed: onCancel),
+                tooltip: l10n.multiCancel,
+                icon: const Icon(Icons.close),
+                onPressed: onCancel),
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: Text('$count',

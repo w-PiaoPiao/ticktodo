@@ -14,6 +14,8 @@ import 'package:ticktodo/features/shared/task_list_view.dart';
 import 'package:ticktodo/notifications/notification_service.dart';
 import 'package:ticktodo/sync/sync_manager.dart';
 import 'package:ticktodo/sync/sync_settings.dart';
+import 'support/in_memory_credential_store.dart';
+import 'support/test_app.dart';
 
 class MockTaskRepo extends Mock implements TaskRepository {}
 class MockMetaRepo extends Mock implements MetaRepository {}
@@ -45,7 +47,7 @@ void main() {
   });
 
   Future<void> pumpList(WidgetTester tester, List<Task> tasks) async {
-    final settings = SyncSettings(prefs);
+    final settings = SyncSettings(prefs, InMemoryCredentialStore());
     final container = ProviderContainer(overrides: [
       appDbProvider.overrideWithValue(stubDb),
       taskRepoProvider.overrideWithValue(repo),
@@ -62,11 +64,9 @@ void main() {
 
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
-      child: MaterialApp(
-        home: Scaffold(
-          body: TaskListView(tasks: tasks, showCompleted: false),
-        ),
-      ),
+      child: testApp(Scaffold(
+        body: TaskListView(tasks: tasks, showCompleted: false),
+      )),
     ));
     await tester.pumpAndSettle();
   }

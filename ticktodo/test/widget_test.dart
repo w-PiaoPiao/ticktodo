@@ -13,6 +13,7 @@ import 'package:ticktodo/data/repositories/task_repository.dart';
 import 'package:ticktodo/notifications/notification_service.dart';
 import 'package:ticktodo/sync/sync_manager.dart';
 import 'package:ticktodo/sync/sync_settings.dart';
+import 'support/in_memory_credential_store.dart';
 
 class MockTaskRepo extends Mock implements TaskRepository {}
 class MockMetaRepo extends Mock implements MetaRepository {}
@@ -49,7 +50,7 @@ void main() {
 
   testWidgets('应用骨架冒烟：底部导航渲染', (tester) async {
     final prefs = await SharedPreferences.getInstance();
-    final settings = SyncSettings(prefs);
+    final settings = SyncSettings(prefs, InMemoryCredentialStore());
     final container = ProviderContainer(overrides: [
       appDbProvider.overrideWithValue(stubDb),
       taskRepoProvider.overrideWithValue(repo),
@@ -62,7 +63,7 @@ void main() {
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
-      child: const TickTodoApp(),
+      child: const TickTodoApp(locale: Locale('zh')),
     ));
     await tester.pump(const Duration(milliseconds: 200));
     expect(find.text('今天'), findsWidgets);

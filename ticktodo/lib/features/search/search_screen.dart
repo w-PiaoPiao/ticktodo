@@ -6,6 +6,7 @@ import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/data/models/task.dart';
 import 'package:ticktodo/features/detail/task_detail_screen.dart';
 import 'package:ticktodo/features/shared/task_list_view.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 import 'package:ticktodo/widgets/empty_state.dart';
 
 /// 全局搜索：标题/备注关键词，300ms 防抖实时搜索。
@@ -53,22 +54,23 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
         title: TextField(
           controller: _controller,
           autofocus: true,
-          decoration: const InputDecoration(
-            hintText: '搜索任务标题或备注',
+          decoration: InputDecoration(
+            hintText: l10n.searchHint,
             border: InputBorder.none,
           ),
           onChanged: _onChanged,
         ),
       ),
       body: _results == null
-          ? EmptyState(icon: Icons.search, title: '输入关键词开始搜索')
+          ? EmptyState(icon: Icons.search, title: l10n.searchInitialHint)
           : _results!.isEmpty
-              ? EmptyState(icon: Icons.search_off, title: '没有找到相关任务')
+              ? EmptyState(icon: Icons.search_off, title: l10n.searchEmpty)
               : TaskListView(
                   tasks: _results!,
                   emptyTitle: '',

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:ticktodo/core/logger.dart';
 import 'package:ticktodo/data/db/app_database.dart';
 import 'package:ticktodo/data/repositories/task_repository.dart';
 import 'package:ticktodo/sync/gzip_codec.dart';
@@ -31,6 +32,9 @@ class SyncResult {
 }
 
 class SyncManager {
+  // 参数名公开、字段私有，跨文件调用点（main/test 共 8 处）依赖命名参数，
+  // 无法改用 this._x 形式参数，因此对构造器关闭该 lint。
+  // ignore_for_file: prefer_initializing_formals
   SyncManager({
     required AppDatabase appDb,
     required TaskRepository taskRepository,
@@ -133,8 +137,9 @@ class SyncManager {
     _debounce = Timer(kAutoUploadDebounce, () async {
       try {
         await syncNow();
-      } catch (_) {
+      } catch (e) {
         // 静默失败，下次变更/打开时重试
+        AppLogger.error('SyncManager.autoUpload', e);
       }
     });
   }

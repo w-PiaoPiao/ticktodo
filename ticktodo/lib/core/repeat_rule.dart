@@ -6,6 +6,8 @@
 // - FREQ=MONTHLY[;INTERVAL=n]
 // - FREQ=YEARLY[;INTERVAL=n]
 
+import 'package:ticktodo/l10n/app_localizations.dart';
+
 enum RepeatFreq { daily, weekly, monthly, yearly }
 
 class RepeatRule {
@@ -32,6 +34,9 @@ class RepeatRule {
   };
   static const _cnOfDay = {
     1: '一', 2: '二', 3: '三', 4: '四', 5: '五', 6: '六', 7: '日',
+  };
+  static const _enOfDay = {
+    1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat', 7: 'Sun',
   };
 
   String encode() {
@@ -84,21 +89,42 @@ class RepeatRule {
     return RepeatRule(freq: freq, interval: interval, byWeekdays: byDays);
   }
 
-  /// 中文标签（列表行与详情页展示）。
-  String get label {
-    if (freq == RepeatFreq.daily) return interval == 1 ? '每天' : '每 $interval 天';
+  /// 本地化标签（列表行与详情页展示）。
+  String label(AppLocalizations l10n) {
+    final zhMode = l10n.localeName.startsWith('zh');
+    String weeklyLabel(String days, int interval) => zhMode
+        ? (interval == 1
+            ? '每$days'
+            : '每$days · 每 $interval 周')
+        : (interval == 1
+            ? l10n.repeatEveryWeek
+            : l10n.repeatEveryNWeeks(interval));
+    if (freq == RepeatFreq.daily) {
+      return interval == 1
+          ? l10n.repeatEveryDay
+          : l10n.repeatEveryNDays(interval);
+    }
     if (freq == RepeatFreq.weekly) {
       const workdays = {1, 2, 3, 4, 5};
-      if (_sameSet(byWeekdays, workdays)) return '工作日';
+      if (_sameSet(byWeekdays, workdays)) return l10n.repeatWorkdays;
       if (byWeekdays.isNotEmpty) {
-        final days =
-            (byWeekdays.toList()..sort()).map((d) => '周${_cnOfDay[d]}').join('、');
-        return interval == 1 ? '每$days' : '每$days · 每 $interval 周';
+        final days = (byWeekdays.toList()..sort())
+            .map((d) => zhMode ? '周${_cnOfDay[d]}' : _enOfDay[d])
+            .join('、');
+        return weeklyLabel(days, interval);
       }
-      return interval == 1 ? '每周' : '每 $interval 周';
+      return interval == 1
+          ? l10n.repeatEveryWeek
+          : l10n.repeatEveryNWeeks(interval);
     }
-    if (freq == RepeatFreq.monthly) return interval == 1 ? '每月' : '每 $interval 月';
-    return interval == 1 ? '每年' : '每 $interval 年';
+    if (freq == RepeatFreq.monthly) {
+      return interval == 1
+          ? l10n.repeatEveryMonth
+          : l10n.repeatEveryNMonths(interval);
+    }
+    return interval == 1
+        ? l10n.repeatEveryYear
+        : l10n.repeatEveryNYears(interval);
   }
 
   /// 根据当前到期日计算下一次到期（纯函数）。

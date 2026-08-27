@@ -7,6 +7,7 @@ import 'package:ticktodo/data/models/task.dart';
 import 'package:ticktodo/features/detail/task_detail_screen.dart';
 import 'package:ticktodo/features/search/search_screen.dart';
 import 'package:ticktodo/features/shared/task_list_view.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 import 'package:ticktodo/widgets/quick_add_sheet.dart';
 
 /// 今天视图
@@ -26,19 +27,24 @@ class TodayScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final tasks = ref.watch(todayTasksProvider).valueOrNull ?? const [];
     final now = DateTime.now();
-    final weekday = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][now.weekday - 1];
+    final weekday = (l10n.localeName.startsWith('zh')
+        ? ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+        : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'])[now.weekday - 1];
+    final dateFmt =
+        l10n.localeName.startsWith('zh') ? DateFormat('M月d日') : DateFormat('MMM d');
 
     return Scaffold(
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('今天',
+            Text(l10n.navToday,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
             Text(
-              '${DateFormat('M月d日').format(now)} $weekday',
+              '${dateFmt.format(now)} $weekday',
               style: Theme.of(context)
                   .textTheme
                   .bodySmall
@@ -49,7 +55,7 @@ class TodayScreen extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            tooltip: '搜索',
+            tooltip: l10n.navSearch,
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SearchScreen()),
             ),
@@ -66,8 +72,8 @@ class TodayScreen extends ConsumerWidget {
       body: TaskListView(
         tasks: tasks,
         emptyIcon: Icons.today,
-        emptyTitle: '今天没有任务',
-        emptySubtitle: '点击右下角 + 快速添加',
+        emptyTitle: l10n.todayEmptyTitle,
+        emptySubtitle: l10n.todayEmptySubtitle,
         onTapTask: (t) => Navigator.of(context).push(MaterialPageRoute(
           builder: (_) => TaskDetailScreen(taskId: t.id ?? 0),
         )),

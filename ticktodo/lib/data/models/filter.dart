@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:ticktodo/core/logger.dart';
+
 /// 自定义过滤器日期模式
 enum FilterDateMode {
   any(0, '不限'),
@@ -107,7 +109,9 @@ class Filter {
     if (raw is String && raw.isNotEmpty) {
       try {
         return (jsonDecode(raw) as List).cast<int>();
-      } catch (_) {}
+      } catch (e) {
+        AppLogger.warn('Filter._decodeList', '$e');
+      }
     }
     return const [];
   }

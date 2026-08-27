@@ -4,9 +4,11 @@ import 'package:ticktodo/data/models/task.dart';
 import 'package:ticktodo/widgets/empty_state.dart';
 import 'package:ticktodo/widgets/task_tile.dart';
 
+import 'support/test_app.dart';
+
 void main() {
   Widget wrap(Widget child) =>
-      MaterialApp(home: Scaffold(body: ListView(children: [child])));
+      testApp(Scaffold(body: ListView(children: [child])));
 
   group('TaskTile', () {
     testWidgets('正常渲染标题与勾选框', (tester) async {

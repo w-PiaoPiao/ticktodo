@@ -5,6 +5,7 @@ import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/data/models/task.dart';
 import 'package:ticktodo/features/detail/task_detail_screen.dart';
 import 'package:ticktodo/features/shared/task_list_view.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 import 'package:ticktodo/widgets/quick_add_sheet.dart';
 
 /// 最近7天视图
@@ -24,6 +25,7 @@ class WeekScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final tasks = ref.watch(weekTasksProvider).valueOrNull ?? const [];
     final remaining = tasks.where((t) => !t.completed).length;
 
@@ -32,10 +34,10 @@ class WeekScreen extends ConsumerWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('最近7天',
+            Text(l10n.navWeek,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
             Text(
-              remaining == 0 ? '全部完成' : '还有 $remaining 项待完成',
+              remaining == 0 ? l10n.weekAllDone : l10n.weekRemaining(remaining),
               style: Theme.of(context)
                   .textTheme
                   .bodySmall
@@ -54,8 +56,8 @@ class WeekScreen extends ConsumerWidget {
       body: TaskListView(
         tasks: tasks,
         emptyIcon: Icons.date_range,
-        emptyTitle: '未来7天没有任务',
-        emptySubtitle: '点右下角 + 添加带日期的任务',
+        emptyTitle: l10n.weekEmptyTitle,
+        emptySubtitle: l10n.weekEmptySubtitle,
         onTapTask: (t) => Navigator.of(context).push(MaterialPageRoute(
           builder: (_) => TaskDetailScreen(taskId: t.id ?? 0),
         )),

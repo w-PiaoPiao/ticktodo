@@ -6,6 +6,7 @@ import 'package:ticktodo/data/models/tag.dart';
 import 'package:ticktodo/data/models/task.dart';
 import 'package:ticktodo/features/lists/lists_screen.dart';
 import 'package:ticktodo/features/tags/tags_screen.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 
 /// 详情页：清单选择 + 标签多选
 class TagSection extends ConsumerWidget {
@@ -22,6 +23,7 @@ class TagSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final lists = ref.watch(listsProvider).valueOrNull ?? const <ListModel>[];
     final tags = ref.watch(tagsProvider).valueOrNull ?? const <Tag>[];
     final meta = ref.read(metaRepoProvider);
@@ -34,7 +36,7 @@ class TagSection extends ConsumerWidget {
           dense: true,
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.playlist_play, size: 20),
-          title: const Text('清单'),
+          title: Text(l10n.listSection),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -105,7 +107,7 @@ class TagSection extends ConsumerWidget {
             }),
             ActionChip(
               avatar: const Icon(Icons.edit_outlined, size: 16),
-              label: const Text('管理标签'),
+              label: Text(l10n.tagManageAction),
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const TagsScreen()),
               ),

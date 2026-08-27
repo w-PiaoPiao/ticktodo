@@ -67,17 +67,26 @@ flutter test integration_test -d <device>   # 端到端冒烟
 
 数据备份到坚果云目录 `TickTodo/todo_backup.json.gz`。
 
-同步策略：本地 SQLite 为主数据源；打开 App 自动下载比较版本；本地变更 30 秒防抖后自动上传；冲突时按记录 `updatedAt` 合并（5 分钟窗口内逐条合并，超出则整体取新）。快照包含任务/子任务/清单/标签/关联/额外提醒/过滤器/**习惯与打卡/番茄会话**。
+同步策略：本地 SQLite 为主数据源；打开 App 自动下载比较版本；本地变更 30 秒防抖后自动上传；冲突时按记录 `updatedAt` 合并（5 分钟窗口内逐条合并，超出则整体取新）。快照包含任务/子任务/清单/标签/关联/额外提醒/过滤器/**习惯与打卡/番茄会话**（含软删墓碑记录，保证取消打卡等负向操作可同步）。
+
+### 本地备份
+
+除坚果云备份外，App 会在本地自动保留快照副本（`buildSnapshot` + gzip，与云端同格式）：
+
+- 首次启动后每 24 小时自动备份一次（变更时 30s 防抖顺带触发），也可在设置页手动「立即备份」
+- 存储于应用文档目录 `backups/`，**保留最近 7 份**，启动时自动清理更旧的
+- 恢复能力复用 `applySnapshot`（当前未提供恢复 UI，避免误覆盖）
 
 ## 目录结构
 
 ```
 lib/
-  core/          # 主题、常量、RepeatRule 引擎、快速添加解析器、providers
+  core/          # 主题、常量、RepeatRule 引擎、快速添加解析器、providers、Logger
   data/
-    db/          # SQLite 建表与迁移（v3）
-    models/      # Task / ListModel / Tag / Subtask / Reminder / Filter
-    repositories # 任务 / 元数据 / 过滤器 数据访问层
+    db/          # SQLite 建表与迁移（v4）
+    models/      # Task / ListModel / Tag / Subtask / Reminder / Filter / Habit
+    repositories # 任务 / 元数据 / 过滤器 / 习惯 / 番茄 数据访问层
+  backup/        # 本地快照备份（自动 + 手动）
   sync/          # WebDAV 客户端、快照序列化/合并、同步编排
   notifications/ # 本地提醒调度（Android + Darwin）
   features/
@@ -90,3 +99,14 @@ lib/
     search/ lists/ tags/ settings/ drawer/
   widgets/       # 通用组件（任务行、重复选择器、快速添加、优先级选择等）
 ```
+
+> 说明：快速添加的中文自然语言解析（`quick_add_parser.dart`）为中文专用语法，不属于 UI 文案国际化范围。
+
+## 国际化
+
+UI 文案通过 `gen-l10n` 管理（`lib/l10n/app_zh.arb` 中文模板 + `app_en.arb` 英文）：
+
+- 新增文案：在 ARB 中添加 key（zh 为模板），运行 `flutter gen-l10n` 生成 `AppLocalizations`，代码中用 `AppLocalizations.of(context).xxx`
+- 语言跟随系统；`TickTodoApp(locale: ...)` 可强制（测试用）
+- 通知频道文案在 `main.dart` 中按系统语言注入 `NotificationService`；未注入时回退中文
+- 模型层数据语义（`TaskPriority.label`、`FilterDateMode.label`、快速添加解析语法）保持中文，UI 显示层通过 l10n 映射

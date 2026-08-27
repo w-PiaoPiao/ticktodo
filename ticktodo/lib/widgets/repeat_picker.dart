@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ticktodo/core/repeat_rule.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 
 /// 底部弹窗选择重复规则。
 ///
@@ -39,6 +40,7 @@ class _RepeatPickerBodyState extends State<_RepeatPickerBody> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return SingleChildScrollView(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -46,13 +48,14 @@ class _RepeatPickerBodyState extends State<_RepeatPickerBody> {
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child:
-                Text('重复', style: Theme.of(context).textTheme.titleMedium),
+                Text(l10n.repeatTitle,
+                    style: Theme.of(context).textTheme.titleMedium),
           ),
           for (final preset in kRepeatPresets)
             ListTile(
               dense: true,
               leading: const Icon(Icons.repeat),
-              title: Text(preset.label),
+              title: Text(preset.label(l10n)),
               trailing:
                   preset.encode() == widget.currentEncoded
                       ? const Icon(Icons.check)
@@ -62,7 +65,7 @@ class _RepeatPickerBodyState extends State<_RepeatPickerBody> {
           ListTile(
             dense: true,
             leading: const Icon(Icons.date_range_outlined),
-            title: const Text('自定义每周…'),
+            title: Text(l10n.repeatCustomWeekly),
             trailing: Icon(_showCustom ? Icons.expand_less : Icons.expand_more),
             onTap: () => setState(() => _showCustom = !_showCustom),
           ),
@@ -76,7 +79,9 @@ class _RepeatPickerBodyState extends State<_RepeatPickerBody> {
                     children: [
                       for (var d = 1; d <= 7; d++)
                         FilterChip(
-                          label: Text(['一', '二', '三', '四', '五', '六', '日'][d - 1]),
+                          label: Text(l10n.localeName.startsWith('zh')
+                              ? ['一', '二', '三', '四', '五', '六', '日'][d - 1]
+                              : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][d - 1]),
                           selected: _customDays.contains(d),
                           onSelected: (sel) => setState(
                               () => sel ? _customDays.add(d) : _customDays.remove(d)),
@@ -93,7 +98,7 @@ class _RepeatPickerBodyState extends State<_RepeatPickerBody> {
                                     freq: RepeatFreq.weekly,
                                     byWeekdays: _customDays)
                                 .encode()),
-                    child: const Text('确定'),
+                    child: Text(l10n.commonConfirm),
                   ),
                 ],
               ),
@@ -102,7 +107,7 @@ class _RepeatPickerBodyState extends State<_RepeatPickerBody> {
           ListTile(
             dense: true,
             leading: const Icon(Icons.block),
-            title: const Text('不重复'),
+            title: Text(l10n.repeatNone),
             onTap: () => Navigator.pop(context, ''),
           ),
           const SizedBox(height: 8),

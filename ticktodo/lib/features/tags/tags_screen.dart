@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ticktodo/core/constants.dart';
 import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/data/models/tag.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 
 class TagsScreen extends ConsumerStatefulWidget {
   const TagsScreen({super.key});
@@ -35,17 +36,18 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
   }
 
   Future<void> _renameTag(Tag tag) async {
+    final l10n = AppLocalizations.of(context);
     final ctrl = TextEditingController(text: tag.name);
     final newName = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('重命名标签'),
+        title: Text(l10n.tagRenameTitle),
         content: TextField(controller: ctrl, autofocus: true),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.commonCancel)),
           TextButton(
             onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: const Text('确定'),
+            child: Text(l10n.commonConfirm),
           ),
         ],
       ),
@@ -59,10 +61,11 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final tags = ref.watch(tagsProvider).valueOrNull ?? const <Tag>[];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('标签管理')),
+      appBar: AppBar(title: Text(l10n.tagManageTitle)),
       body: Column(
         children: [
           Expanded(
@@ -86,9 +89,9 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
                     ),
                   ),
                 if (tags.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(32),
-                    child: Center(child: Text('还没有标签，在下方创建一个吧')),
+                  Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Center(child: Text(l10n.tagEmpty)),
                   ),
               ],
             ),
@@ -100,8 +103,8 @@ class _TagsScreenState extends ConsumerState<TagsScreen> {
                 Expanded(
                   child: TextField(
                     controller: _nameCtrl,
-                    decoration: const InputDecoration(
-                      hintText: '标签名称',
+                    decoration: InputDecoration(
+                      hintText: l10n.tagNameHint,
                       isDense: true,
                     ),
                     onSubmitted: (_) => _createTag(),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ticktodo/core/constants.dart';
 import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/data/models/habit.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 
 /// 习惯新建/编辑底部表单。
 class HabitEditSheet extends ConsumerStatefulWidget {
@@ -47,6 +48,7 @@ class _HabitEditSheetState extends ConsumerState<HabitEditSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Padding(
       padding: EdgeInsets.only(
         left: 16,
@@ -58,21 +60,21 @@ class _HabitEditSheetState extends ConsumerState<HabitEditSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(widget.existing == null ? '新建习惯' : '编辑习惯',
+          Text(widget.existing == null ? l10n.habitNew : l10n.habitEdit,
               textAlign: TextAlign.center,
               style: theme.textTheme.titleMedium),
           const SizedBox(height: 14),
           TextField(
             controller: _name,
             autofocus: true,
-            decoration: const InputDecoration(
-              labelText: '习惯名称',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: l10n.habitNameLabel,
+              border: const OutlineInputBorder(),
             ),
             onSubmitted: (_) => _save(),
           ),
           const SizedBox(height: 12),
-          Text('颜色', style: theme.textTheme.labelMedium),
+          Text(l10n.habitColor, style: theme.textTheme.labelMedium),
           Wrap(
             spacing: 8,
             children: [
@@ -95,18 +97,18 @@ class _HabitEditSheetState extends ConsumerState<HabitEditSheet> {
             ],
           ),
           const SizedBox(height: 12),
-          Text('每周目标', style: theme.textTheme.labelMedium),
+          Text(l10n.habitWeeklyTarget, style: theme.textTheme.labelMedium),
           Wrap(
             spacing: 6,
             children: [
               ChoiceChip(
-                label: const Text('每天'),
+                label: Text(l10n.habitEveryDay),
                 selected: _targetDays == 0,
                 onSelected: (_) => setState(() => _targetDays = 0),
               ),
               for (var d = 1; d <= 6; d++)
                 ChoiceChip(
-                  label: Text('$d 天/周'),
+                  label: Text(l10n.habitDaysPerWeek(d)),
                   selected: _targetDays == d,
                   onSelected: (_) => setState(() => _targetDays = d),
                 ),
@@ -116,7 +118,7 @@ class _HabitEditSheetState extends ConsumerState<HabitEditSheet> {
           FilledButton.icon(
             onPressed: _saving ? null : _save,
             icon: const Icon(Icons.check),
-            label: const Text('保存'),
+            label: Text(l10n.commonSave),
           ),
         ],
       ),

@@ -3,11 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ticktodo/core/constants.dart';
 import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/core/repeat_rule.dart';
-import 'package:ticktodo/data/models/subtask.dart';
 import 'package:ticktodo/data/models/task.dart';
 import 'package:ticktodo/features/detail/reminders_section.dart';
 import 'package:ticktodo/features/detail/subtask_section.dart';
 import 'package:ticktodo/features/detail/tag_section.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 import 'package:ticktodo/widgets/date_time_picker.dart';
 import 'package:ticktodo/widgets/priority_picker.dart';
 import 'package:ticktodo/widgets/repeat_picker.dart';
@@ -90,19 +90,22 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   Future<void> _delete() async {
     final task = _task;
     if (task == null || task.id == null) return;
+    final l10n = AppLocalizations.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('删除任务'),
-        content: Text('确定要删除「${task.title.isEmpty ? '无标题任务' : task.title}」吗？'),
+        title: Text(l10n.taskDeleteTitle),
+        content: Text(l10n.taskDeleteConfirm(
+            task.title.isEmpty ? l10n.untitledTask : task.title)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
+            child: Text(l10n.commonCancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除', style: TextStyle(color: Color(AppColors.overDueRed))),
+            child: Text(l10n.commonDelete,
+                style: const TextStyle(color: Color(AppColors.overDueRed))),
           ),
         ],
       ),
@@ -139,6 +142,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
     }
     final task = _task!;
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
 
     return PopScope(
       canPop: !_isEmptyNew,
@@ -148,12 +152,12 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       },
       child: Scaffold(
       appBar: AppBar(
-        title: const Text('任务详情'),
+        title: Text(l10n.taskDetailTitle),
         actions: [
           IconButton(
             onPressed: _delete,
             icon: const Icon(Icons.delete_outline),
-            tooltip: '删除',
+            tooltip: l10n.taskDeleteTooltip,
           ),
         ],
       ),
@@ -165,8 +169,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
             style: theme.textTheme.headlineSmall
                 ?.copyWith(fontWeight: FontWeight.w600),
             maxLines: 3,
-            decoration: const InputDecoration(
-              hintText: '任务标题',
+            decoration: InputDecoration(
+              hintText: l10n.taskTitleHint,
               border: InputBorder.none,
             ),
             onChanged: (v) => _save(task.copyWith(title: v)),
@@ -175,8 +179,8 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
           TextField(
             controller: TextEditingController(text: task.note),
             maxLines: 5,
-            decoration: const InputDecoration(
-              hintText: '备注',
+            decoration: InputDecoration(
+              hintText: l10n.taskNoteHint,
               border: InputBorder.none,
             ),
             onChanged: (v) => _save(task.copyWith(note: v)),
@@ -190,13 +194,15 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.repeat, size: 20),
             title: Text(task.repeatRule == null
-                ? '重复'
-                : '重复 · ${RepeatRule.parse(task.repeatRule)?.label ?? '自定义'}'),
+                ? l10n.repeatTitle
+                : l10n.taskRepeatPrefix(
+                    RepeatRule.parse(task.repeatRule)?.label(l10n) ??
+                        l10n.commonCustom)),
             trailing: task.repeatRule == null
                 ? const Icon(Icons.chevron_right)
                 : IconButton(
                     icon: const Icon(Icons.close),
-                    tooltip: '清除重复',
+                    tooltip: l10n.taskRepeatClear,
                     onPressed: () => _save(task.copyWith(clearRepeatRule: true)),
                   ),
             onTap: () async {
@@ -215,7 +221,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               dense: true,
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.flag_outlined, size: 20),
-              title: const Text('优先级'),
+              title: Text(l10n.taskPriority),
             ),
           ),
           Padding(

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 
 /// 状态/优先级等共用常量
 class AppColors {
   static const int overDueRed = 0xFFE04C4C;
 }
+
+/// 应用版本（与 pubspec.yaml version 保持同步）
+const String kAppVersion = '1.1.0';
 
 /// 清单色板（选择清单/标签颜色用）
 const List<int> kPalette = [
@@ -50,18 +54,22 @@ class DateUtilsEx {
   }
 }
 
-/// 日期徽章文案：今天/明天/昨天/MM月dd日
-String dateBadge(String dateStr, {DateTime? now}) {
+/// 日期徽章文案：今天/明天/昨天/MM月dd日（本地化）
+String dateBadge(String dateStr, AppLocalizations l10n, {DateTime? now}) {
   final nowD = now ?? DateTime.now();
   final today = DateTime(nowD.year, nowD.month, nowD.day);
   final d = DateUtilsEx.parseDate(dateStr);
   final todayStr = DateUtilsEx.formatDate(today);
 
-  if (dateStr == todayStr) return '今天';
-  if (d == today.add(const Duration(days: 1))) return '明天';
-  if (d == today.subtract(const Duration(days: 1))) return '昨天';
+  if (dateStr == todayStr) return l10n.dateBadgeToday;
+  if (d == today.add(const Duration(days: 1))) return l10n.dateBadgeTomorrow;
+  if (d == today.subtract(const Duration(days: 1))) {
+    return l10n.dateBadgeYesterday;
+  }
   final sameYear = d.year == nowD.year;
-  return sameYear ? '${d.month}月${d.day}日' : '${d.year}年${d.month}月${d.day}日';
+  return sameYear
+      ? l10n.dateBadgeMd(d.month, d.day)
+      : l10n.dateBadgeYmd(d.year, d.month, d.day);
 }
 
 bool isOverdue(String dateStr, {DateTime? now}) {

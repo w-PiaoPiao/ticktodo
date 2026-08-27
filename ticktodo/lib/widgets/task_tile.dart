@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:ticktodo/core/constants.dart';
 import 'package:ticktodo/data/models/list_model.dart';
 import 'package:ticktodo/data/models/task.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 
 /// 任务列表行：勾选框 + 标题 + 优先级/日期/清单信息
 class TaskTile extends StatelessWidget {
@@ -39,6 +40,7 @@ class TaskTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final overdue = task.dueDate != null && isOverdue(task.dueDate!, now: now);
 
     final title = Text(
@@ -57,7 +59,7 @@ class TaskTile extends StatelessWidget {
     final dateBadgeWidget = task.dueDate == null
         ? null
         : Text(
-            dateBadge(task.dueDate!, now: now),
+            dateBadge(task.dueDate!, l10n, now: now),
             style: theme.textTheme.bodySmall?.copyWith(
               color: overdue && !task.completed
                   ? const Color(AppColors.overDueRed)

@@ -14,6 +14,8 @@ import 'package:ticktodo/data/repositories/task_repository.dart';
 import 'package:ticktodo/notifications/notification_service.dart';
 import 'package:ticktodo/sync/sync_manager.dart';
 import 'package:ticktodo/sync/sync_settings.dart';
+import 'support/in_memory_credential_store.dart';
+import 'support/test_app.dart';
 import 'package:ticktodo/widgets/quick_add_sheet.dart';
 
 class MockTaskRepo extends Mock implements TaskRepository {}
@@ -49,7 +51,7 @@ void main() {
   Future<void> pumpSheet(WidgetTester tester,
       {bool defaultDueDate = false}) async {
     final prefs = await SharedPreferences.getInstance();
-    final settings = SyncSettings(prefs);
+    final settings = SyncSettings(prefs, InMemoryCredentialStore());
     final container = ProviderContainer(overrides: [
       taskRepoProvider.overrideWithValue(repo),
       metaRepoProvider.overrideWithValue(meta),
@@ -65,18 +67,16 @@ void main() {
 
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
-      child: MaterialApp(
-        home: Builder(builder: (ctx) {
-          return Scaffold(
-            body: Center(
-              child: TextButton(
-                onPressed: () => showQuickAdd(ctx, defaultDueDate: defaultDueDate),
-                child: const Text('open'),
-              ),
+      child: testApp(Builder(builder: (ctx) {
+        return Scaffold(
+          body: Center(
+            child: TextButton(
+              onPressed: () => showQuickAdd(ctx, defaultDueDate: defaultDueDate),
+              child: const Text('open'),
             ),
-          );
-        }),
-      ),
+          ),
+        );
+      })),
     ));
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();

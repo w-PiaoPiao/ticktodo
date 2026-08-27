@@ -11,18 +11,27 @@ import 'package:ticktodo/features/drawer/app_drawer.dart';
 import 'package:ticktodo/features/matrix/matrix_screen.dart';
 import 'package:ticktodo/features/today/today_screen.dart';
 import 'package:ticktodo/features/week/week_screen.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 
 /// 全局导航 key：供通知点击跳转使用
 final appNavigatorKey = GlobalKey<NavigatorState>();
 
 class TickTodoApp extends ConsumerStatefulWidget {
-  const TickTodoApp({super.key, this.initialTaskId, this.onOpenTask});
+  const TickTodoApp({
+    super.key,
+    this.initialTaskId,
+    this.onOpenTask,
+    this.locale,
+  });
 
   /// 冷启动时由通知携带的任务 id
   final int? initialTaskId;
 
   /// 打开任务详情（由 main 注入，与通知点击同一逻辑）
   final void Function(int taskId)? onOpenTask;
+
+  /// 强制语言（测试用）；null 跟随系统。
+  final Locale? locale;
 
   @override
   ConsumerState<TickTodoApp> createState() => _TickTodoAppState();
@@ -45,9 +54,12 @@ class _TickTodoAppState extends ConsumerState<TickTodoApp> {
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeModeProvider);
     return MaterialApp(
-      title: '滴答清单Pro',
+      onGenerateTitle: (ctx) => AppLocalizations.of(ctx).appTitle,
       debugShowCheckedModeBanner: false,
       navigatorKey: appNavigatorKey,
+      locale: widget.locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       theme: buildLightTheme(),
       darkTheme: buildDarkTheme(),
       themeMode: themeMode,
@@ -114,12 +126,12 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.today_outlined), selectedIcon: Icon(Icons.today), label: '今天'),
-          NavigationDestination(icon: Icon(Icons.date_range_outlined), selectedIcon: Icon(Icons.date_range), label: '最近7天'),
-          NavigationDestination(icon: Icon(Icons.calendar_month_outlined), selectedIcon: Icon(Icons.calendar_month), label: '日历'),
-          NavigationDestination(icon: Icon(Icons.checklist_outlined), selectedIcon: Icon(Icons.checklist), label: '全部'),
-          NavigationDestination(icon: Icon(Icons.grid_view_outlined), selectedIcon: Icon(Icons.grid_view), label: '四象限'),
+        destinations: [
+          NavigationDestination(icon: const Icon(Icons.today_outlined), selectedIcon: const Icon(Icons.today), label: AppLocalizations.of(context).navToday),
+          NavigationDestination(icon: const Icon(Icons.date_range_outlined), selectedIcon: const Icon(Icons.date_range), label: AppLocalizations.of(context).navWeek),
+          NavigationDestination(icon: const Icon(Icons.calendar_month_outlined), selectedIcon: const Icon(Icons.calendar_month), label: AppLocalizations.of(context).navCalendar),
+          NavigationDestination(icon: const Icon(Icons.checklist_outlined), selectedIcon: const Icon(Icons.checklist), label: AppLocalizations.of(context).navAll),
+          NavigationDestination(icon: const Icon(Icons.grid_view_outlined), selectedIcon: const Icon(Icons.grid_view), label: AppLocalizations.of(context).navMatrix),
         ],
       ),
     );

@@ -4,6 +4,7 @@ import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/data/models/task.dart';
 import 'package:ticktodo/features/detail/task_detail_screen.dart';
 import 'package:ticktodo/features/shared/task_list_view.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 import 'package:ticktodo/widgets/quick_add_sheet.dart';
 
 /// 全部任务：未完成在前，按清单分组？——统一列表 + 筛选 chips
@@ -27,6 +28,7 @@ class _AllScreenState extends ConsumerState<AllScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final tasks = ref.watch(allTasksProvider).valueOrNull ?? const [];
     final lists = ref.watch(listsProvider).valueOrNull ?? const [];
     final filtered = _filterListId == null
@@ -35,7 +37,7 @@ class _AllScreenState extends ConsumerState<AllScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('全部任务',
+        title: Text(l10n.navAllTasks,
             style: Theme.of(context)
                 .textTheme
                 .titleLarge
@@ -50,7 +52,7 @@ class _AllScreenState extends ConsumerState<AllScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     ListTile(
-                      title: const Text('全部清单'),
+                      title: Text(AppLocalizations.of(ctx).allFilterAllLists),
                       trailing: _filterListId == null
                           ? const Icon(Icons.check)
                           : null,
@@ -89,8 +91,8 @@ class _AllScreenState extends ConsumerState<AllScreen> {
       body: TaskListView(
         tasks: filtered,
         emptyIcon: Icons.checklist,
-        emptyTitle: _filterListId == null ? '还没有任务' : '该清单暂无任务',
-        emptySubtitle: '点击右下角 + 添加任务',
+        emptyTitle: _filterListId == null ? l10n.allEmptyTitle : l10n.allListEmpty,
+        emptySubtitle: l10n.allEmptySubtitle,
         onTapTask: (t) => Navigator.of(context).push(MaterialPageRoute(
           builder: (_) => TaskDetailScreen(taskId: t.id ?? 0),
         )),

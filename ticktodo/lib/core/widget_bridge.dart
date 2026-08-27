@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:ticktodo/core/logger.dart';
 
 /// 与原生侧（MainActivity）的通道：小部件刷新 + 启动日期。
 const MethodChannel _channel = MethodChannel('ticktodo/widget');
@@ -7,8 +8,9 @@ const MethodChannel _channel = MethodChannel('ticktodo/widget');
 Future<void> refreshWidget() async {
   try {
     await _channel.invokeMethod('refreshWidget');
-  } catch (_) {
+  } catch (e) {
     // 非 Android / 测试环境静默
+    AppLogger.warn('widget_bridge.refreshWidget', '$e');
   }
 }
 
@@ -17,7 +19,8 @@ Future<String?> getStartupDate() async {
   try {
     final v = await _channel.invokeMethod<String>('getStartupDate');
     return v;
-  } catch (_) {
+  } catch (e) {
+    AppLogger.warn('widget_bridge.getStartupDate', '$e');
     return null;
   }
 }

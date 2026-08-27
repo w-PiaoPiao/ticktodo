@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:ticktodo/backup/local_backup.dart';
+import 'package:ticktodo/core/constants.dart';
 import 'package:ticktodo/core/providers.dart';
-import 'package:ticktodo/sync/sync_settings.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 import 'package:ticktodo/sync/webdav_client.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -36,29 +40,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _saveCredentials() async {
+    final l10n = AppLocalizations.of(context);
     final settings = ref.read(syncSettingsProvider);
     final url = _urlCtrl.text.trim();
     final user = _userCtrl.text.trim();
     final pass = _passCtrl.text;
     if (url.isEmpty || user.isEmpty || pass.isEmpty) {
-      setState(() => _syncStatus = '请填写完整的账号信息');
+      setState(() => _syncStatus = l10n.settingsIncomplete);
       return;
     }
     setState(() => _saving = true);
     await settings.setCredentials(url, user, pass);
     ref.read(syncManagerProvider).refreshClient();
-    setState(() {
-      _saving = false;
-      _syncStatus = '已保存';
-    });
+    // 凭据换绑后立即尝试一次同步（fire-and-forget，失败在状态栏展示）
+    unawaited(_syncNow());
+    setState(() => _saving = false);
   }
 
   Future<void> _testConnection() async {
+    final l10n = AppLocalizations.of(context);
     final settings = ref.read(syncSettingsProvider);
     if (!settings.hasCredentials) {
       await _saveCredentials();
     }
-    setState(() => _syncStatus = '测试中…');
+    setState(() => _syncStatus = l10n.settingsTesting);
     try {
       final client = ref.read(syncManagerProvider).client ??
           WebDavClient(
@@ -67,24 +72,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             settings.password!,
           );
       await client.getFile('TickTodo/');
-      setState(() => _syncStatus = '连接成功');
+      setState(() => _syncStatus = l10n.settingsConnected);
     } catch (e) {
-      setState(() => _syncStatus = '连接失败：$e');
+      setState(() => _syncStatus = l10n.settingsConnectFailed('$e'));
     }
   }
 
   Future<void> _syncNow() async {
-    setState(() => _syncStatus = '同步中…');
+    final l10n = AppLocalizations.of(context);
+    setState(() => _syncStatus = l10n.settingsSyncing);
     final result = await ref.read(syncManagerProvider).syncNow();
     setState(() {
       if (result.success) {
         final parts = <String>[];
-        if (result.didUpload) parts.add('已上传');
-        if (result.didDownload) parts.add('已下载');
-        if (result.merged) parts.add('已合并');
-        _syncStatus = parts.isEmpty ? '无需同步' : parts.join(' · ');
+        if (result.didUpload) parts.add(l10n.settingsUploaded);
+        if (result.didDownload) parts.add(l10n.settingsDownloaded);
+        if (result.merged) parts.add(l10n.settingsMerged);
+        _syncStatus =
+            parts.isEmpty ? l10n.settingsNothingToSync : parts.join(' · ');
       } else {
-        _syncStatus = '同步失败：${result.error}';
+        _syncStatus = l10n.settingsSyncFailed('${result.error}');
       }
     });
   }
@@ -93,38 +100,39 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final settings = ref.watch(syncSettingsProvider);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final lastSync = settings.lastSyncAt;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('设置')),
+      appBar: AppBar(title: Text(l10n.settingsTitle)),
       body: ListView(
         children: [
-          const _SectionHeader('坚果云同步'),
+          _SectionHeader(l10n.settingsSyncSection),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Column(
               children: [
                 TextField(
                   controller: _urlCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'WebDAV 地址',
-                    hintText: 'https://dav.jianguoyun.com/dav/',
-                    prefixIcon: Icon(Icons.cloud_outlined, size: 20),
+                  decoration: InputDecoration(
+                    labelText: l10n.settingsWebdavUrl,
+                    hintText: l10n.settingsWebdavHint,
+                    prefixIcon: const Icon(Icons.cloud_outlined, size: 20),
                   ),
                 ),
                 TextField(
                   controller: _userCtrl,
-                  decoration: const InputDecoration(
-                    labelText: '账号（坚果云邮箱）',
-                    prefixIcon: Icon(Icons.person_outline, size: 20),
+                  decoration: InputDecoration(
+                    labelText: l10n.settingsAccount,
+                    prefixIcon: const Icon(Icons.person_outline, size: 20),
                   ),
                 ),
                 TextField(
                   controller: _passCtrl,
                   obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: '应用密码',
-                    prefixIcon: Icon(Icons.key_outlined, size: 20),
+                  decoration: InputDecoration(
+                    labelText: l10n.settingsAppPassword,
+                    prefixIcon: const Icon(Icons.key_outlined, size: 20),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -132,17 +140,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   children: [
                     OutlinedButton(
                       onPressed: _saving ? null : _saveCredentials,
-                      child: const Text('保存'),
+                      child: Text(l10n.commonSave),
                     ),
                     const SizedBox(width: 8),
                     OutlinedButton(
                       onPressed: _testConnection,
-                      child: const Text('测试连接'),
+                      child: Text(l10n.settingsTestConnection),
                     ),
                     const SizedBox(width: 8),
                     FilledButton(
                       onPressed: _syncNow,
-                      child: const Text('立即同步'),
+                      child: Text(l10n.settingsSyncNow),
                     ),
                   ],
                 ),
@@ -153,8 +161,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     _syncStatus.isNotEmpty
                         ? _syncStatus
                         : (lastSync == null
-                            ? '尚未同步'
-                            : '上次同步：${DateTime.fromMillisecondsSinceEpoch(lastSync).toString().substring(0, 16)}'),
+                            ? l10n.settingsNeverSynced
+                            : l10n.settingsLastSync(DateTime
+                                .fromMillisecondsSinceEpoch(lastSync)
+                                .toString()
+                                .substring(0, 16)
+                                .replaceFirst('T', ' '))),
                     style: theme.textTheme.bodySmall
                         ?.copyWith(color: theme.colorScheme.outline),
                   ),
@@ -163,8 +175,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    '提示：坚果云「应用密码」在坚果云网页版 → 账户信息 → 安全选项 中生成，'
-                    '不要直接使用登录密码。',
+                    l10n.settingsPasswordTip,
                     style: theme.textTheme.bodySmall
                         ?.copyWith(color: theme.colorScheme.outlineVariant),
                   ),
@@ -172,16 +183,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
             ),
           ),
-          const _SectionHeader('外观'),
+          _SectionHeader(l10n.settingsBackupSection),
+          const _LocalBackupSection(),
+          _SectionHeader(l10n.settingsAppearance),
           ListTile(
             leading: const Icon(Icons.brightness_6_outlined),
-            title: const Text('主题'),
+            title: Text(l10n.settingsTheme),
             trailing: DropdownButton<ThemeMode>(
               value: ref.watch(themeModeProvider),
-              items: const [
-                DropdownMenuItem(value: ThemeMode.system, child: Text('跟随系统')),
-                DropdownMenuItem(value: ThemeMode.light, child: Text('浅色')),
-                DropdownMenuItem(value: ThemeMode.dark, child: Text('深色')),
+              items: [
+                DropdownMenuItem(
+                    value: ThemeMode.system,
+                    child: Text(l10n.settingsThemeSystem)),
+                DropdownMenuItem(
+                    value: ThemeMode.light,
+                    child: Text(l10n.settingsThemeLight)),
+                DropdownMenuItem(
+                    value: ThemeMode.dark,
+                    child: Text(l10n.settingsThemeDark)),
               ],
               onChanged: (v) {
                 if (v != null) {
@@ -190,11 +209,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               },
             ),
           ),
-          const _SectionHeader('关于'),
-          const ListTile(
-            leading: Icon(Icons.info_outline),
-            title: Text('滴答清单Pro'),
-            subtitle: Text('版本 1.0.0 · 本地优先 · 坚果云备份同步'),
+          _SectionHeader(l10n.settingsAbout),
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: Text(l10n.appTitle),
+            subtitle: Text(l10n.settingsAboutSubtitle(kAppVersion)),
           ),
           const SizedBox(height: 32),
         ],
@@ -216,6 +235,94 @@ class _SectionHeader extends StatelessWidget {
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
               color: Theme.of(context).colorScheme.primary,
             ),
+      ),
+    );
+  }
+}
+
+/// 本地备份区块：上次备份时间 + 立即备份 + 最近备份列表。
+class _LocalBackupSection extends ConsumerStatefulWidget {
+  const _LocalBackupSection();
+
+  @override
+  ConsumerState<_LocalBackupSection> createState() => _LocalBackupSectionState();
+}
+
+class _LocalBackupSectionState extends ConsumerState<_LocalBackupSection> {
+  List<BackupEntry> _backups = const [];
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final backups = await ref.read(localBackupProvider)?.listBackups();
+    if (!mounted) return;
+    setState(() => _backups = backups ?? const []);
+  }
+
+  Future<void> _backupNow() async {
+    final l10n = AppLocalizations.of(context);
+    final mgr = ref.read(localBackupProvider);
+    if (mgr == null) return;
+    setState(() => _busy = true);
+    try {
+      final path = await mgr.backupNow();
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(path == null ? l10n.settingsBackupFailed : l10n.settingsBackupSuccess),
+      ));
+      await _load();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  String _fmtTime(int? ms, AppLocalizations l10n) {
+    if (ms == null) return l10n.settingsBackupNever;
+    final dt = DateTime.fromMillisecondsSinceEpoch(ms);
+    final s = dt.toString().substring(0, 16);
+    return s.replaceFirst('T', ' ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mgr = ref.watch(localBackupProvider);
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.settingsBackupLast(_fmtTime(mgr?.lastBackupAt, l10n)),
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.outline),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: (_busy || mgr == null) ? null : _backupNow,
+            icon: const Icon(Icons.save_alt, size: 18),
+            label: Text(_busy ? l10n.settingsBackupBusy : l10n.settingsBackupNow),
+          ),
+          const SizedBox(height: 8),
+          if (_backups.isNotEmpty)
+            ..._backups.take(3).map((b) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Text(
+                    '${b.name} · ${b.sizeLabel}',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.outlineVariant),
+                  ),
+                )),
+        ],
       ),
     );
   }

@@ -105,7 +105,7 @@ void main() {
   test('标签过滤查询', () async {
     final tagA = (await meta.upsertTag(Tag(name: 'A')))!;
     final tagB = (await meta.upsertTag(Tag(name: 'B')))!;
-    final t1 = (await addTask(title: '带A'))!;
+    final t1 = await addTask(title: '带A');
     await addTask(title: '不带');
     await meta.linkTaskTag(t1, tagA);
     await meta.linkTaskTag(t1, tagB);

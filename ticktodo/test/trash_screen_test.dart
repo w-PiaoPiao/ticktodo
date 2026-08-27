@@ -11,6 +11,8 @@ import 'package:ticktodo/data/repositories/task_repository.dart';
 import 'package:ticktodo/features/trash/trash_screen.dart';
 import 'package:ticktodo/sync/sync_manager.dart';
 import 'package:ticktodo/sync/sync_settings.dart';
+import 'support/in_memory_credential_store.dart';
+import 'support/test_app.dart';
 
 class MockTaskRepo extends Mock implements TaskRepository {}
 
@@ -37,7 +39,7 @@ void main() {
   });
 
   Future<void> pumpTrash(WidgetTester tester) async {
-    final settings = SyncSettings(prefs);
+    final settings = SyncSettings(prefs, InMemoryCredentialStore());
     final container = ProviderContainer(overrides: [
       appDbProvider.overrideWithValue(stubDb),
       taskRepoProvider.overrideWithValue(repo),
@@ -52,7 +54,7 @@ void main() {
 
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
-      child: const MaterialApp(home: TrashScreen()),
+      child: testApp(const TrashScreen()),
     ));
     await tester.pumpAndSettle();
   }

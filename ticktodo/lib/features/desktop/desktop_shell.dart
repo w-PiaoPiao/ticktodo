@@ -14,6 +14,7 @@ import 'package:ticktodo/features/settings/settings_screen.dart';
 import 'package:ticktodo/features/today/today_screen.dart';
 import 'package:ticktodo/features/trash/trash_screen.dart';
 import 'package:ticktodo/features/week/week_screen.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 import 'package:ticktodo/widgets/quick_add_sheet.dart';
 
 /// macOS 桌面外壳：左侧边栏导航 + 内容区 + 平台菜单栏 + 键盘快捷键。
@@ -32,7 +33,6 @@ class DesktopShell extends ConsumerStatefulWidget {
 class _DesktopShellState extends ConsumerState<DesktopShell> {
   int _index = 0;
 
-  static const _viewLabels = ['今天', '最近7天', '日历', '全部任务', '四象限'];
   static const _viewKeys = [
     LogicalKeyboardKey.digit1,
     LogicalKeyboardKey.digit2,
@@ -82,21 +82,30 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
     );
   }
 
+  String _viewLabel(int i, AppLocalizations l10n) => switch (i) {
+        0 => l10n.navToday,
+        1 => l10n.navWeek,
+        2 => l10n.navCalendar,
+        3 => l10n.navAllTasks,
+        _ => l10n.navMatrix,
+      };
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return PlatformMenuBar(
       menus: [
-        PlatformMenu(label: '滴答清单Pro', menus: [
+        PlatformMenu(label: l10n.desktopMenuApp, menus: [
           PlatformMenuItemGroup(members: [
             PlatformMenuItem(
-              label: '关于滴答清单Pro',
+              label: l10n.desktopMenuAbout,
               onSelected: () => showAboutDialog(context: context),
             ),
           ]),
           PlatformMenuItemGroup(members: [
             PlatformMenuItem(
-              label: '设置…',
+              label: l10n.desktopMenuSettings,
               onSelected: _openSettings,
               shortcut:
                   const SingleActivator(LogicalKeyboardKey.comma, meta: true),
@@ -104,7 +113,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
           ]),
           PlatformMenuItemGroup(members: [
             PlatformMenuItem(
-              label: '退出滴答清单Pro',
+              label: l10n.desktopMenuQuit,
               onSelected: () =>
                   ServicesBinding.instance.exitApplication(ui.AppExitType.required),
               shortcut:
@@ -112,26 +121,26 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
             ),
           ]),
         ]),
-        PlatformMenu(label: '文件', menus: [
+        PlatformMenu(label: l10n.desktopMenuFile, menus: [
           PlatformMenuItemGroup(members: [
             PlatformMenuItem(
-              label: '新建任务…',
+              label: l10n.desktopMenuNewTask,
               onSelected: _openQuickAdd,
               shortcut:
                   const SingleActivator(LogicalKeyboardKey.keyN, meta: true),
             ),
             PlatformMenuItem(
-              label: '搜索…',
+              label: l10n.desktopMenuSearch,
               onSelected: _openSearch,
               shortcut:
                   const SingleActivator(LogicalKeyboardKey.keyF, meta: true),
             ),
           ]),
         ]),
-        PlatformMenu(label: '视图', menus: [
-          for (var i = 0; i < _viewLabels.length; i++)
+        PlatformMenu(label: l10n.desktopMenuView, menus: [
+          for (var i = 0; i < 5; i++)
             PlatformMenuItem(
-              label: '${i + 1}. ${_viewLabels[i]}',
+              label: '${i + 1}. ${_viewLabel(i, l10n)}',
               onSelected: () => setState(() => _index = i),
               shortcut: SingleActivator(
                 [
@@ -144,10 +153,10 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
               ),
             ),
         ]),
-        PlatformMenu(label: '帮助', menus: [
+        PlatformMenu(label: l10n.desktopMenuHelp, menus: [
           PlatformMenuItemGroup(members: [
             PlatformMenuItem(
-              label: '键盘快捷键',
+              label: l10n.desktopMenuShortcuts,
               onSelected: () => showDialog<void>(
                 context: context,
                 builder: (ctx) => const _ShortcutsDialog(),
@@ -236,6 +245,7 @@ class _SidebarState extends ConsumerState<_Sidebar> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final lists = ref.watch(listsProvider).valueOrNull ?? const [];
 
     return SizedBox(
@@ -253,46 +263,46 @@ class _SidebarState extends ConsumerState<_Sidebar> {
                   Icon(Icons.check_circle,
                       color: theme.colorScheme.primary, size: 22),
                   const SizedBox(width: 8),
-                  Text('滴答清单Pro',
+                  Text(l10n.appTitle,
                       style: theme.textTheme.titleMedium
                           ?.copyWith(fontWeight: FontWeight.w700)),
                 ],
               ),
             ),
             // 智能清单
-            _sectionHeader('智能清单'),
+            _sectionHeader(l10n.desktopSidebarFilters),
             _item(
               index: 0,
               icon: Icons.today_outlined,
               selectedIcon: Icons.today,
-              label: '今天',
+              label: l10n.navToday,
             ),
             _item(
               index: 1,
               icon: Icons.date_range_outlined,
               selectedIcon: Icons.date_range,
-              label: '最近7天',
+              label: l10n.navWeek,
             ),
             _item(
               index: 2,
               icon: Icons.calendar_month_outlined,
               selectedIcon: Icons.calendar_month,
-              label: '日历',
+              label: l10n.navCalendar,
             ),
             _item(
               index: 3,
               icon: Icons.checklist_outlined,
               selectedIcon: Icons.checklist,
-              label: '全部任务',
+              label: l10n.navAllTasks,
             ),
             _item(
               index: 4,
               icon: Icons.grid_view_outlined,
               selectedIcon: Icons.grid_view,
-              label: '四象限',
+              label: l10n.navMatrix,
             ),
             if (lists.isNotEmpty) ...[
-              _sectionHeader('清单'),
+              _sectionHeader(l10n.navLists),
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 8),
                 padding:
@@ -328,13 +338,18 @@ class _SidebarState extends ConsumerState<_Sidebar> {
             const Spacer(),
             const Divider(height: 1, indent: 12, endIndent: 12),
             const SizedBox(height: 6),
-            _actionTile(Icons.add, '新建任务', widget.onQuickAdd),
-            _actionTile(Icons.search, '搜索', widget.onSearch),
-            _actionTile(Icons.filter_alt_outlined, '智能清单', widget.onOpenFilters),
-            _actionTile(Icons.repeat_one_outlined, '习惯打卡', widget.onOpenHabits),
-            _actionTile(Icons.timer_outlined, '番茄专注', widget.onOpenFocus),
-            _actionTile(Icons.delete_outline, '回收站', widget.onOpenTrash),
-            _actionTile(Icons.settings_outlined, '设置 ⌘,', widget.onOpenSettings),
+            _actionTile(Icons.add, l10n.desktopNewTask, widget.onQuickAdd),
+            _actionTile(Icons.search, l10n.desktopSearch, widget.onSearch),
+            _actionTile(
+                Icons.filter_alt_outlined, l10n.navFilters, widget.onOpenFilters),
+            _actionTile(
+                Icons.repeat_one_outlined, l10n.navHabits, widget.onOpenHabits),
+            _actionTile(
+                Icons.timer_outlined, l10n.navFocus, widget.onOpenFocus),
+            _actionTile(
+                Icons.delete_outline, l10n.navTrash, widget.onOpenTrash),
+            _actionTile(
+                Icons.settings_outlined, l10n.desktopSettingsCmd, widget.onOpenSettings),
             const SizedBox(height: 10),
           ],
         ),
@@ -448,27 +463,27 @@ class _SidebarState extends ConsumerState<_Sidebar> {
 class _ShortcutsDialog extends StatelessWidget {
   const _ShortcutsDialog();
 
-  static const _rows = <(String, String)>[
-    ('⌘N', '新建任务'),
-    ('⌘F', '搜索'),
-    ('⌘1', '今天'),
-    ('⌘2', '最近7天'),
-    ('⌘3', '日历'),
-    ('⌘4', '全部任务'),
-    ('⌘,', '设置'),
-    ('⌘Q', '退出'),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final rows = <(String, String)>[
+      ('⌘N', l10n.desktopNewTask),
+      ('⌘F', l10n.desktopSearch),
+      ('⌘1', l10n.navToday),
+      ('⌘2', l10n.navWeek),
+      ('⌘3', l10n.navCalendar),
+      ('⌘4', l10n.navAllTasks),
+      ('⌘,', l10n.navSettings),
+      ('⌘Q', l10n.desktopShortcutQuit),
+    ];
     return AlertDialog(
-      title: const Text('键盘快捷键'),
+      title: Text(l10n.desktopShortcutsTitle),
       content: SizedBox(
         width: 280,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            for (final (key, desc) in _rows)
+            for (final (key, desc) in rows)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 3),
                 child: Row(
@@ -494,7 +509,7 @@ class _ShortcutsDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('好'),
+          child: Text(l10n.commonOk),
         ),
       ],
     );

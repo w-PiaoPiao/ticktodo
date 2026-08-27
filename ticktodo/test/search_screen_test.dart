@@ -8,6 +8,8 @@ import 'package:ticktodo/data/repositories/meta_repository.dart';
 import 'package:ticktodo/data/repositories/task_repository.dart';
 import 'package:ticktodo/features/search/search_screen.dart';
 
+import 'support/test_app.dart';
+
 class MockTaskRepo extends Mock implements TaskRepository {}
 class MockMetaRepo extends Mock implements MetaRepository {}
 
@@ -33,7 +35,7 @@ void main() {
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
-      child: const MaterialApp(home: SearchScreen()),
+      child: testApp(const SearchScreen()),
     ));
     await tester.pump();
     return container;

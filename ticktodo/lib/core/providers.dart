@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:ticktodo/backup/local_backup.dart';
 import 'package:ticktodo/core/widget_bridge.dart';
 import 'package:ticktodo/data/db/app_database.dart';
 import 'package:ticktodo/data/models/list_model.dart';
@@ -33,12 +34,16 @@ final syncManagerProvider = Provider<SyncManager>(
 final notificationServiceProvider = Provider<NotificationService>(
     (ref) => throw UnimplementedError());
 
+/// 本地备份管理器；main 中 override，测试未覆盖时为 null（bumpMutation 兼容）。
+final localBackupProvider = Provider<LocalBackupManager?>((ref) => null);
+
 /// 数据变更计数：任何写操作后 +1，视图监听它自动刷新。
 final taskMutationProvider = StateProvider<int>((ref) => 0);
 
 void bumpMutation(WidgetRef ref) {
   ref.read(taskMutationProvider.notifier).state++;
   ref.read(syncManagerProvider).scheduleAutoUpload();
+  ref.read(localBackupProvider)?.scheduleAutoBackup();
   refreshWidget();
 }
 

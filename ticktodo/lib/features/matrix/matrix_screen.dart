@@ -5,6 +5,7 @@ import 'package:ticktodo/data/models/task.dart';
 import 'package:ticktodo/features/all/all_screen.dart'
     show allTasksProvider;
 import 'package:ticktodo/features/detail/task_detail_screen.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 
 /// 四象限视图（艾森豪威尔矩阵）：
 /// 纵轴「重要性」= 优先级中/高；横轴「紧急性」= 到期日为今天或已过期。
@@ -13,6 +14,7 @@ class MatrixScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final tasks = ref.watch(allTasksProvider).valueOrNull ?? const [];
     final open = tasks.where((t) => !t.completed).toList();
 
@@ -33,16 +35,16 @@ class MatrixScreen extends ConsumerWidget {
       ..sort(_byDueThenPriority);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('四象限')),
+      appBar: AppBar(title: Text(l10n.navMatrix)),
       body: Column(
         children: [
           Expanded(
             child: Row(
               children: [
                 _quadrant(context,
-                    title: '重要且紧急', subtitle: '立即做', tasks: q1, color: AppColors.overDueRed),
+                    title: l10n.matrixQ1Title, subtitle: l10n.matrixQ1Subtitle, tasks: q1, color: AppColors.overDueRed),
                 _quadrant(context,
-                    title: '重要不紧急', subtitle: '安排做', tasks: q2, color: 0xFF2F9D45),
+                    title: l10n.matrixQ2Title, subtitle: l10n.matrixQ2Subtitle, tasks: q2, color: 0xFF2F9D45),
               ],
             ),
           ),
@@ -50,9 +52,9 @@ class MatrixScreen extends ConsumerWidget {
             child: Row(
               children: [
                 _quadrant(context,
-                    title: '紧急不重要', subtitle: '委托做', tasks: q3, color: 0xFFF29900),
+                    title: l10n.matrixQ3Title, subtitle: l10n.matrixQ3Subtitle, tasks: q3, color: 0xFFF29900),
                 _quadrant(context,
-                    title: '不重要不紧急', subtitle: '少做', tasks: q4, color: 0xFF9E9E9E),
+                    title: l10n.matrixQ4Title, subtitle: l10n.matrixQ4Subtitle, tasks: q4, color: 0xFF9E9E9E),
               ],
             ),
           ),
@@ -75,6 +77,7 @@ class MatrixScreen extends ConsumerWidget {
     required int color,
   }) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Expanded(
       child: Card(
         margin: const EdgeInsets.all(6),
@@ -110,7 +113,7 @@ class MatrixScreen extends ConsumerWidget {
             Expanded(
               child: tasks.isEmpty
                   ? Center(
-                      child: Text('空',
+                      child: Text(l10n.matrixEmpty,
                           style: theme.textTheme.bodySmall
                               ?.copyWith(color: theme.colorScheme.outline)))
                   : ListView.builder(
@@ -126,7 +129,7 @@ class MatrixScreen extends ConsumerWidget {
                           leading: Icon(Icons.radio_button_unchecked,
                               size: 18, color: Color(t.priority.colorValue)),
                           title: Text(
-                            t.title.isEmpty ? '无标题任务' : t.title,
+                            t.title.isEmpty ? l10n.untitledTask : t.title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodyMedium,

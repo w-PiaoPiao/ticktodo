@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ticktodo/widgets/repeat_picker.dart';
 
+import 'support/test_app.dart';
+
 void main() {
   Future<void> Function(WidgetTester, String? currentEncoded,
       void Function(String?) onResult) buildHost() {
     return (tester, currentEncoded, onResult) async {
-      await tester.pumpWidget(MaterialApp(
-        home: Builder(builder: (ctx) {
+      await tester.pumpWidget(testApp(
+        Builder(builder: (ctx) {
           return Scaffold(
             body: Center(
               child: TextButton(

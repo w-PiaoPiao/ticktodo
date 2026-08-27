@@ -2,11 +2,36 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:ticktodo/core/logger.dart';
 import 'package:ticktodo/data/models/task.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 
 class NotificationService {
-  NotificationService({FlutterLocalNotificationsPlugin? plugin})
-      : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+  NotificationService({FlutterLocalNotificationsPlugin? plugin, AppLocalizations? l10n})
+      : _plugin = plugin ?? FlutterLocalNotificationsPlugin(), // ignore: prefer_initializing_formals
+        _l10n = l10n; // ignore: prefer_initializing_formals
+
+  /// 通知频道名与正文的本地化源（main 中加载）。
+  /// null 时使用中文回退（测试/未注入场景）。
+  final AppLocalizations? _l10n;
+
+  String _str(String zh, String Function(AppLocalizations) en) =>
+      _l10n == null ? zh : en(_l10n);
+
+  String get _taskChannelName =>
+      _str('任务提醒', (l) => l.notifTaskChannel);
+
+  String get _taskChannelDesc =>
+      _str('任务到期/提醒通知', (l) => l.notifTaskChannelDesc);
+
+  String get _pomodoroChannelName =>
+      _str('番茄专注', (l) => l.notifPomodoroChannel);
+
+  String get _pomodoroChannelDesc =>
+      _str('专注/休息阶段切换提醒', (l) => l.notifPomodoroChannelDesc);
+
+  String get _openTaskHint =>
+      _str('点击查看任务详情', (l) => l.notifOpenTask);
 
   final FlutterLocalNotificationsPlugin _plugin;
   bool _initialized = false;
@@ -24,8 +49,9 @@ class NotificationService {
     try {
       final info = await FlutterTimezone.getLocalTimezone();
       tz.setLocalLocation(tz.getLocation(info.identifier));
-    } catch (_) {
+    } catch (e) {
       // 时区获取失败时保持 UTC，不影响功能
+      AppLogger.warn('NotificationService.init', '时区获取失败: $e');
     }
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const darwin = DarwinInitializationSettings(
@@ -44,7 +70,9 @@ class NotificationService {
       if (launch?.didNotificationLaunchApp == true) {
         _initialTaskId = _parsePayload(launch?.notificationResponse?.payload);
       }
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.warn('NotificationService.init', '读取冷启动通知失败: $e');
+    }
   }
 
   void _onResponse(NotificationResponse resp) {
@@ -79,13 +107,13 @@ class NotificationService {
       await _plugin.zonedSchedule(
         task.id!,
         task.title,
-        task.note.isEmpty ? '点击查看任务详情' : task.note,
+        task.note.isEmpty ? _openTaskHint : task.note,
         when,
-        const NotificationDetails(
+        NotificationDetails(
           android: AndroidNotificationDetails(
             'task_reminders',
-            '任务提醒',
-            channelDescription: '任务到期/提醒通知',
+            _taskChannelName,
+            channelDescription: _taskChannelDesc,
             importance: Importance.high,
             priority: Priority.high,
           ),
@@ -96,7 +124,8 @@ class NotificationService {
         payload: '${task.id}',
       );
       return true;
-    } catch (_) {
+    } catch (e) {
+      AppLogger.error('NotificationService.scheduleReminder', e);
       return false;
     }
   }
@@ -109,8 +138,9 @@ class NotificationService {
       for (var i = 0; i < _maxExtraPerTask; i++) {
         await _plugin.cancel(base + i);
       }
-    } catch (_) {
+    } catch (e) {
       // 未初始化（测试环境）/平台异常时静默
+      AppLogger.warn('NotificationService.cancelReminder', '$e');
     }
   }
 
@@ -121,23 +151,23 @@ class NotificationService {
   /// 避免任务数增长后撞车。
   static const int pomodoroNotificationId = 1900000001;
 
-  static const NotificationDetails _pomodoroDetails = NotificationDetails(
-    android: AndroidNotificationDetails(
-      'pomodoro',
-      '番茄专注',
-      channelDescription: '专注/休息阶段切换提醒',
-      importance: Importance.high,
-      priority: Priority.high,
-    ),
-    iOS: DarwinNotificationDetails(
-      presentAlert: true,
-      presentSound: true,
-    ),
-    macOS: DarwinNotificationDetails(
-      presentAlert: true,
-      presentSound: true,
-    ),
-  );
+  NotificationDetails get _pomodoroDetails => NotificationDetails(
+        android: AndroidNotificationDetails(
+          'pomodoro',
+          _pomodoroChannelName,
+          channelDescription: _pomodoroChannelDesc,
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentSound: true,
+        ),
+        macOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentSound: true,
+        ),
+      );
 
   /// 调度番茄阶段结束通知（绝对时间，由系统触发）。
   ///
@@ -159,8 +189,9 @@ class NotificationService {
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
       );
-    } catch (_) {
+    } catch (e) {
       // 测试环境/平台异常静默
+      AppLogger.warn('NotificationService.schedulePomodoroEnd', '$e');
     }
   }
 
@@ -168,7 +199,9 @@ class NotificationService {
   Future<void> cancelPomodoroNotification() async {
     try {
       await _plugin.cancel(pomodoroNotificationId);
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.warn('NotificationService.cancelPomodoro', '$e');
+    }
   }
 
   /// 立即显示一条通知（即时提醒）。
@@ -180,8 +213,9 @@ class NotificationService {
   }) async {
     try {
       await _plugin.show(id, title, body, _pomodoroDetails, payload: payload);
-    } catch (_) {
+    } catch (e) {
       // 测试环境/平台异常静默
+      AppLogger.warn('NotificationService.showNow', '$e');
     }
   }
 
@@ -202,11 +236,11 @@ class NotificationService {
           title,
           note,
           _tzDateTime(at),
-          const NotificationDetails(
+          NotificationDetails(
             android: AndroidNotificationDetails(
               'task_reminders',
-              '任务提醒',
-              channelDescription: '任务到期/提醒通知',
+              _taskChannelName,
+              channelDescription: _taskChannelDesc,
               importance: Importance.high,
               priority: Priority.high,
             ),
@@ -216,7 +250,9 @@ class NotificationService {
               UILocalNotificationDateInterpretation.absoluteTime,
           payload: '$taskId',
         );
-      } catch (_) {}
+      } catch (e) {
+        AppLogger.warn('NotificationService.scheduleExtraReminders', '$e');
+      }
     }
   }
 
@@ -227,7 +263,8 @@ class NotificationService {
   tz.TZDateTime _tzDateTime(int ms) {
     try {
       return tz.TZDateTime.fromMillisecondsSinceEpoch(tz.local, ms);
-    } catch (_) {
+    } catch (e) {
+      AppLogger.warn('NotificationService._tzDateTime', '$e');
       return tz.TZDateTime.fromMillisecondsSinceEpoch(tz.UTC, ms);
     }
   }

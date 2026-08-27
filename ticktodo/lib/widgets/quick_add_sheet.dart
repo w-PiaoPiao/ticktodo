@@ -6,6 +6,7 @@ import 'package:ticktodo/core/quick_add_parser.dart';
 import 'package:ticktodo/data/models/list_model.dart';
 import 'package:ticktodo/data/models/tag.dart';
 import 'package:ticktodo/data/models/task.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 
 /// 弹出快速添加：桌面端为居中模态对话框（macOS 规范），移动端为底部输入条。
 void showQuickAdd(
@@ -116,9 +117,10 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
       bumpMutation(ref);
       if (!mounted) return;
       final messenger = ScaffoldMessenger.of(context);
+      final l10n = AppLocalizations.of(context);
       Navigator.pop(context);
       messenger.showSnackBar(SnackBar(
-        content: Text('已添加「${draft.title}」'),
+        content: Text(l10n.quickAddAdded(draft.title)),
         duration: const Duration(seconds: 2),
       ));
     } finally {
@@ -128,6 +130,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Padding(
       padding: EdgeInsets.only(
         left: 16,
@@ -146,9 +149,9 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
             minLines: 1,
             textInputAction: TextInputAction.done,
             onSubmitted: (_) => _save(),
-            decoration: const InputDecoration(
-              hintText: '输入任务，如“明天下午3点开会 #工作 !高”',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              hintText: l10n.quickAddHint,
+              border: const OutlineInputBorder(),
               isDense: true,
             ),
             onChanged: (v) => setState(() => _draft = QuickAddParser.parse(v)),
@@ -166,7 +169,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                   if (_draft.dueDate != null)
                     Chip(
                       avatar: const Icon(Icons.event, size: 16),
-                      label: Text(dateBadge(_draft.dueDate!)),
+                      label: Text(dateBadge(_draft.dueDate!, l10n)),
                       visualDensity: VisualDensity.compact,
                     ),
                   if (_draft.dueTime != null)
@@ -185,7 +188,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
                   for (final name in _draft.tagNames)
                     Chip(
                       avatar: const Icon(Icons.label, size: 16),
-                      label: Text('#$name'),
+                      label: Text(l10n.quickAddTagPrefix(name)),
                       visualDensity: VisualDensity.compact,
                     ),
                 ],
@@ -197,9 +200,9 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
               Expanded(
                 child: DropdownButtonFormField<int>(
                   initialValue: _listId,
-                  decoration: const InputDecoration(
-                    labelText: '清单',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: l10n.quickAddListLabel,
+                    border: const OutlineInputBorder(),
                     isDense: true,
                   ),
                   items: [
@@ -213,7 +216,7 @@ class _QuickAddSheetState extends ConsumerState<QuickAddSheet> {
               FilledButton.icon(
                 onPressed: _draft.title.isEmpty ? null : _save,
                 icon: const Icon(Icons.send, size: 18),
-                label: const Text('添加'),
+                label: Text(l10n.quickAddConfirm),
               ),
             ],
           ),

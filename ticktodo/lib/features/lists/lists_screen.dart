@@ -3,8 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ticktodo/core/constants.dart';
 import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/data/models/list_model.dart';
-import 'package:ticktodo/data/repositories/meta_repository.dart';
-import 'package:ticktodo/data/repositories/task_repository.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 
 /// 清单管理页；pickMode=true 时点击返回所选清单
 class ListsScreen extends ConsumerStatefulWidget {
@@ -41,7 +40,7 @@ class _ListsScreenState extends ConsumerState<ListsScreen> {
         (ref.read(listsProvider).valueOrNull ?? const <ListModel>[]).toList();
     if (oldIndex < 0 || oldIndex >= lists.length) return;
     setState(() {
-      if (newIndex > oldIndex) newIndex -= 1;
+      // onReorderItem 的 newIndex 已针对移除项调整，无需补偿
       final moved = lists.removeAt(oldIndex);
       lists.insert(newIndex.clamp(0, lists.length), moved);
     });
@@ -59,22 +58,24 @@ class _ListsScreenState extends ConsumerState<ListsScreen> {
   }
 
   Future<void> _deleteList(ListModel list) async {
+    final l10n = AppLocalizations.of(context);
     if (list.isDefault) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('默认清单「收集箱」不可删除')),
+        SnackBar(content: Text(l10n.listDefaultNotDeletable)),
       );
       return;
     }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('删除清单'),
-        content: Text('删除「${list.name}」？其中的任务将保留（回到默认清单）。'),
+        title: Text(l10n.listDeleteTitle),
+        content: Text(l10n.listDeleteConfirm(list.name)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.commonCancel)),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除', style: TextStyle(color: Color(AppColors.overDueRed))),
+            child: Text(l10n.commonDelete,
+                style: const TextStyle(color: Color(AppColors.overDueRed))),
           ),
         ],
       ),
@@ -94,19 +95,20 @@ class _ListsScreenState extends ConsumerState<ListsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final lists = ref.watch(listsProvider).valueOrNull ?? const <ListModel>[];
     final taskRepo = ref.read(taskRepoProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.pickMode ? '选择清单' : '清单'),
+        title: Text(widget.pickMode ? l10n.listChoose : l10n.listManage),
       ),
       body: Column(
         children: [
           Expanded(
             child: ReorderableListView.builder(
               itemCount: lists.length,
-              onReorder: _reorder,
+              onReorderItem: _reorder,
               buildDefaultDragHandles: !widget.pickMode,
               itemBuilder: (ctx, i) {
                 final list = lists[i];
@@ -132,7 +134,7 @@ class _ListsScreenState extends ConsumerState<ListsScreen> {
                   subtitle: FutureBuilder<int>(
                     future: taskRepo.queryByList(list.id!).then((t) => t.length),
                     builder: (_, snap) => Text(
-                      '${snap.data ?? 0} 个任务',
+                      l10n.filterCountLists(snap.data ?? 0),
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ),
@@ -151,7 +153,9 @@ class _ListsScreenState extends ConsumerState<ListsScreen> {
                                     ? Theme.of(context).colorScheme.primary
                                     : null,
                               ),
-                              tooltip: list.isPinned ? '取消置顶' : '置顶',
+                              tooltip: list.isPinned
+                                  ? l10n.listUnpin
+                                  : l10n.listPin,
                               onPressed: () => _togglePin(list),
                             ),
                             if (!list.isDefault)
@@ -174,7 +178,7 @@ class _ListsScreenState extends ConsumerState<ListsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('新建清单',
+                Text(l10n.listCreate,
                     style: Theme.of(context).textTheme.labelLarge),
                 const SizedBox(height: 8),
                 Row(
@@ -182,8 +186,8 @@ class _ListsScreenState extends ConsumerState<ListsScreen> {
                     Expanded(
                       child: TextField(
                         controller: _nameCtrl,
-                        decoration: const InputDecoration(
-                          hintText: '清单名称',
+                        decoration: InputDecoration(
+                          hintText: l10n.listCreateHint,
                           isDense: true,
                         ),
                         onSubmitted: (_) => _createList(),

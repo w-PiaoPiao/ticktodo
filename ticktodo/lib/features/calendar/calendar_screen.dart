@@ -6,6 +6,7 @@ import 'package:ticktodo/data/models/task.dart';
 import 'package:ticktodo/features/calendar/month_grid.dart';
 import 'package:ticktodo/features/detail/task_detail_screen.dart';
 import 'package:ticktodo/features/shared/task_list_view.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 
 /// 月内到期任务（日历圆点 + 点选当天详情）
 final monthTasksProvider =
@@ -55,6 +56,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final tasks = ref.watch(monthTasksProvider(_month)).valueOrNull ?? const [];
     final byDate = <String, List<Task>>{};
     for (final t in tasks) {
@@ -65,7 +67,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
     final cells = buildMonthGrid(_month.year, _month.month);
     final now = DateTime.now();
-    final todayStr = DateUtilsEx.formatDate(now);
     final selectedStr = _selectedDay == null
         ? null
         : DateUtilsEx.formatDate(_selectedDay!);
@@ -80,7 +81,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               icon: const Icon(Icons.chevron_left),
               onPressed: () => _changeMonth(-1),
             ),
-            Text('${_month.year}年${_month.month}月',
+            Text(l10n.calendarMonthTitle(_month.year, _month.month),
                 style: theme.textTheme.titleLarge
                     ?.copyWith(fontWeight: FontWeight.bold)),
             IconButton(
@@ -88,7 +89,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               onPressed: () => _changeMonth(1),
             ),
             if (!(_month.year == now.year && _month.month == now.month))
-              TextButton(onPressed: () => _changeMonth(0), child: const Text('今天')),
+              TextButton(
+                  onPressed: () => _changeMonth(0),
+                  child: Text(l10n.calendarToday)),
           ],
         ),
       ),
@@ -99,7 +102,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Row(
               children: [
-                for (final w in const ['一', '二', '三', '四', '五', '六', '日'])
+                for (final w in (l10n.localeName.startsWith('zh')
+                    ? const ['一', '二', '三', '四', '五', '六', '日']
+                    : const ['M', 'T', 'W', 'T', 'F', 'S', 'S']))
                   Expanded(
                     child: Center(
                       child: Text(w,
@@ -150,13 +155,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
-                  Text(dateBadge(selectedStr!),
+                  Text(dateBadge(selectedStr, AppLocalizations.of(context)),
                       style: theme.textTheme.titleSmall
                           ?.copyWith(fontWeight: FontWeight.w600)),
                   const Spacer(),
                   TextButton.icon(
                     icon: const Icon(Icons.add, size: 18),
-                    label: const Text('添加任务'),
+                    label: Text(l10n.calendarAddTask),
                     onPressed: () => Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => TaskDetailScreen(
@@ -173,7 +178,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 : TaskListView(
                     tasks: selectedTasks,
                     emptyIcon: Icons.event_available,
-                    emptyTitle: '当天没有任务',
+                    emptyTitle: l10n.calendarDayEmpty,
                     onTapTask: (t) => Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => TaskDetailScreen(taskId: t.id ?? 0),
@@ -260,7 +265,7 @@ class EmptyHint extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Text(
-        '点击日期查看当天任务',
+        AppLocalizations.of(context).calendarNoSelection,
         style: Theme.of(context)
             .textTheme
             .bodySmall

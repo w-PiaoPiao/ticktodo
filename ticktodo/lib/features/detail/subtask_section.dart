@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/data/models/subtask.dart';
-import 'package:ticktodo/data/repositories/task_repository.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 
 class SubtaskSection extends ConsumerStatefulWidget {
   const SubtaskSection({super.key, required this.taskId});
@@ -77,12 +77,13 @@ class _SubtaskSectionState extends ConsumerState<SubtaskSection> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Text('子任务',
+          child: Text(l10n.taskSubtaskTitle,
               style: Theme.of(context)
                   .textTheme
                   .titleSmall
@@ -125,9 +126,9 @@ class _SubtaskSectionState extends ConsumerState<SubtaskSection> {
           ),
         TextField(
           controller: _inputCtrl,
-          decoration: const InputDecoration(
-            hintText: '添加子任务…',
-            prefixIcon: Icon(Icons.add, size: 20),
+          decoration: InputDecoration(
+            hintText: l10n.taskSubtaskHint,
+            prefixIcon: const Icon(Icons.add, size: 20),
             border: InputBorder.none,
           ),
           onSubmitted: (_) => _add(),

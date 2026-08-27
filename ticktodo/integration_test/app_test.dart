@@ -8,6 +8,7 @@ import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/data/db/app_database.dart';
 import 'package:ticktodo/data/repositories/task_repository.dart';
 import 'package:ticktodo/notifications/notification_service.dart';
+import 'package:ticktodo/sync/credential_store.dart';
 import 'package:ticktodo/sync/sync_manager.dart';
 import 'package:ticktodo/sync/sync_settings.dart';
 
@@ -17,7 +18,8 @@ void main() {
 
   testWidgets('端到端：新建任务 → 勾选完成 → 删除', (tester) async {
     final prefs = await SharedPreferences.getInstance();
-    final settings = SyncSettings(prefs);
+    final settings = SyncSettings(prefs, SecureCredentialStore());
+    await settings.load();
     final appDb = await AppDatabase.open();
     final taskRepo = TaskRepository(appDb);
     final syncManager = SyncManager(
@@ -34,7 +36,7 @@ void main() {
         syncManagerProvider.overrideWithValue(syncManager),
         notificationServiceProvider.overrideWithValue(notifications),
       ],
-      child: const TickTodoApp(),
+      child: const TickTodoApp(locale: Locale('zh')),
     ));
     await tester.pump(const Duration(seconds: 2));
 

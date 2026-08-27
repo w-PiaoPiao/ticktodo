@@ -1,7 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ticktodo/core/repeat_rule.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
+import 'package:ticktodo/l10n/app_localizations_zh.dart' as zh;
 
 void main() {
+  final zhL10n = zh.AppLocalizationsZh();
   group('parse/encode', () {
     test('null/空串/垃圾输入返回 null', () {
       expect(RepeatRule.parse(null), isNull);
@@ -81,19 +84,21 @@ void main() {
   });
 
   group('label', () {
+    AppLocalizations zh() => zhL10n;
+
     test('预设中文文案', () {
-      expect(kRepeatPresets[0].label, '每天'); // daily
-      expect(kRepeatPresets[1].label, '每周'); // weekly
-      expect(kRepeatPresets[2].label, '工作日'); // workdays
-      expect(kRepeatPresets[3].label, '每月'); // monthly
-      expect(kRepeatPresets[4].label, '每年'); // yearly
+      expect(kRepeatPresets[0].label(zh()), '每天'); // daily
+      expect(kRepeatPresets[1].label(zh()), '每周'); // weekly
+      expect(kRepeatPresets[2].label(zh()), '工作日'); // workdays
+      expect(kRepeatPresets[3].label(zh()), '每月'); // monthly
+      expect(kRepeatPresets[4].label(zh()), '每年'); // yearly
     });
 
     test('自定义周几文案与间隔文案', () {
       const r = RepeatRule(freq: RepeatFreq.weekly, byWeekdays: {1, 3});
-      expect(r.label, '每周一、周三');
+      expect(r.label(zh()), '每周一、周三');
       const every2Days = RepeatRule(freq: RepeatFreq.daily, interval: 2);
-      expect(every2Days.label, '每 2 天');
+      expect(every2Days.label(zh()), '每 2 天');
     });
   });
 }
