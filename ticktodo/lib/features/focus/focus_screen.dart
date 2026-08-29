@@ -24,18 +24,21 @@ class FocusScreen extends ConsumerStatefulWidget {
 enum _Phase { idle, focus, breakTime }
 
 class _FocusScreenState extends ConsumerState<FocusScreen> {
-  Timer? _timer;
   DateTime? _segmentStart;
   _Phase _phase = _Phase.idle;
   bool _running = false;
-  int _remaining = FocusScreen.focusMinutes * 60;
+  // 倒计时以"结束时刻"表达：圆环组件内部按真实时间差刷新，切后台依然准确
+  DateTime? _endsAt;
+  // 暂停/未开始时圆环显示的剩余秒数
+  int _frozenRemaining = FocusScreen.focusMinutes * 60;
   int _totalSeconds = FocusScreen.focusMinutes * 60;
+  int _segment = 0; // 段编号：每开始新的一段 +1，防止同一段重复触发完成回调
   int _finishedFocusCount = 0; // 本轮次内完成番茄数（决定长短休）
   Task? _selectedTask;
   // 缓存查询结果：避免计时期间每秒 build 重建 DB 查询
   late final Future<List<Task>> _taskFuture =
       ref.read(taskRepoProvider).queryAll(includeCompleted: false);
-  Future<List<int>>? _statsFuture;
+  Future<(int, int)>? _statsFuture;
 
   @override
   void initState() {
@@ -43,10 +46,8 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
     _statsFuture = _loadStats();
   }
 
-  Future<List<int>> _loadStats() => Future.wait([
-        ref.read(pomodoroRepoProvider).todayCount(),
-        ref.read(pomodoroRepoProvider).todayMinutes(),
-      ]);
+  Future<(int, int)> _loadStats() =>
+      ref.read(pomodoroRepoProvider).todayStats();
 
   /// 完成一个会话后刷新今日统计。
   void _refreshStats() {
@@ -55,7 +56,6 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
 
   @override
   void dispose() {
-    _timer?.cancel();
     super.dispose();
   }
 
@@ -70,11 +70,12 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
     setState(() {
       _phase = _Phase.focus;
       _totalSeconds = FocusScreen.focusMinutes * 60;
-      _remaining = _totalSeconds;
+      _frozenRemaining = _totalSeconds;
       _segmentStart = DateTime.now();
+      _endsAt = _segmentStart!.add(Duration(seconds: _totalSeconds));
+      _segment++;
       _running = true;
     });
-    _scheduleTick();
     _scheduleEndNotification();
   }
 
@@ -86,11 +87,12 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
     setState(() {
       _phase = _Phase.breakTime;
       _totalSeconds = minutes * 60;
-      _remaining = _totalSeconds;
+      _frozenRemaining = _totalSeconds;
       _segmentStart = DateTime.now();
+      _endsAt = _segmentStart!.add(Duration(seconds: _totalSeconds));
+      _segment++;
       _running = true;
     });
-    _scheduleTick();
     _scheduleEndNotification();
   }
 
@@ -99,33 +101,17 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
   /// 用系统调度而非 Future.delayed：后者在移动端挂起后不执行导致
   /// 后台到点不通知，且暂停后 stale 回调会在错误时刻弹通知。
   void _scheduleEndNotification() {
+    final remain =
+        _endsAt!.difference(DateTime.now()).inSeconds.clamp(0, _totalSeconds);
     final l10n = AppLocalizations.of(context);
     ref.read(notificationServiceProvider).schedulePomodoroEnd(
           title: _endTitle(l10n),
           body: _endBody(l10n),
-          at: DateTime.now().add(Duration(seconds: _remaining)),
+          at: DateTime.now().add(Duration(seconds: remain)),
         );
   }
 
-  void _scheduleTick() {
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
-  }
-
-  void _tick() {
-    if (!_running || _segmentStart == null) return;
-    final elapsed =
-        DateTime.now().difference(_segmentStart!).inSeconds;
-    final remain = _totalSeconds - elapsed;
-    if (remain <= 0) {
-      _onSegmentEnd();
-    } else {
-      setState(() => _remaining = remain);
-    }
-  }
-
   Future<void> _onSegmentEnd() async {
-    _timer?.cancel();
     if (_phase == _Phase.focus) {
       // 记录完成的番茄
       await ref.read(pomodoroRepoProvider).saveSession(PomodoroSession(
@@ -157,7 +143,6 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
   }
 
   Future<void> _giveUp() async {
-    _timer?.cancel();
     await ref.read(notificationServiceProvider).cancelPomodoroNotification();
     if (_phase == _Phase.focus && _segmentStart != null) {
       final elapsedMin =
@@ -178,38 +163,35 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
     setState(() {
       _phase = _Phase.idle;
       _running = false;
-      _remaining = FocusScreen.focusMinutes * 60;
-      _totalSeconds = _remaining;
+      _frozenRemaining = FocusScreen.focusMinutes * 60;
+      _totalSeconds = _frozenRemaining;
+      _endsAt = null;
       _segmentStart = null;
+      _segment++;
     });
   }
 
   Future<void> _pauseResume() async {
     if (_running) {
       // 暂停：冻结剩余时间，保留原总时长（进度环位置不变）
-      _timer?.cancel();
-      final elapsed = DateTime.now().difference(_segmentStart!).inSeconds;
+      final remain = _endsAt!
+          .difference(DateTime.now())
+          .inSeconds
+          .clamp(0, _totalSeconds);
       setState(() {
-        _remaining =
-            (_totalSeconds - elapsed).clamp(0, _totalSeconds);
+        _frozenRemaining = remain;
+        _endsAt = null;
         _running = false;
       });
       // 取消已调度的结束通知，恢复时按剩余时间重新调度
       ref.read(notificationServiceProvider).cancelPomodoroNotification();
     } else {
-      setState(() => _running = true);
-      // 按剩余时间回推段起点，保持真实时间差计算正确
-      _segmentStart = DateTime.now()
-          .subtract(Duration(seconds: _totalSeconds - _remaining));
-      _scheduleTick();
+      setState(() {
+        _running = true;
+        _endsAt = DateTime.now().add(Duration(seconds: _frozenRemaining));
+      });
       _scheduleEndNotification();
     }
-  }
-
-  String get _timeLabel {
-    final m = (_remaining ~/ 60).toString().padLeft(2, '0');
-    final s = (_remaining % 60).toString().padLeft(2, '0');
-    return '$m:$s';
   }
 
   @override
@@ -224,49 +206,16 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
           children: [
             _phaseLabel(theme),
             const SizedBox(height: 20),
-            SizedBox(
-              width: 220,
-              height: 220,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  SizedBox(
-                    width: 220,
-                    height: 220,
-                    child: CircularProgressIndicator(
-                      value: _totalSeconds == 0
-                          ? 0
-                          : 1 - _remaining / _totalSeconds,
-                      strokeWidth: 10,
-                      strokeCap: StrokeCap.round,
-                      backgroundColor:
-                          theme.colorScheme.surfaceContainerHighest,
-                      color: _phase == _Phase.breakTime
-                          ? const Color(0xFF2F9D45)
-                          : const Color(0xFFE04C4C),
-                    ),
-                  ),
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(_timeLabel,
-                          style: theme.textTheme.displayMedium
-                              ?.copyWith(fontWeight: FontWeight.w700)),
-                      if (_phase == _Phase.focus && _selectedTask != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Text(
-                            _selectedTask!.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.outline),
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
+            _CountdownRing(
+              totalSeconds: _totalSeconds,
+              running: _running,
+              endsAt: _endsAt,
+              frozenRemaining: _frozenRemaining,
+              isBreak: _phase == _Phase.breakTime,
+              segment: _segment,
+              taskTitle:
+                  _phase == _Phase.focus ? _selectedTask?.title : null,
+              onCompleted: _onSegmentEnd,
             ),
             const SizedBox(height: 24),
             Row(
@@ -364,13 +313,126 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
     final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.only(top: 4),
-      child: FutureBuilder<List<int>>(
+      child: FutureBuilder<(int, int)>(
         future: _statsFuture,
         builder: (_, snap) {
-          final data = snap.data ?? const [0, 0];
-          return Text(l10n.focusTodayStats(data[0], data[1]),
+          final data = snap.data ?? (0, 0);
+          return Text(l10n.focusTodayStats(data.$1, data.$2),
               style: theme.textTheme.labelLarge);
         },
+      ),
+    );
+  }
+}
+
+/// 倒计时圆环：内部持有 1s ticker，每秒只重建自身，
+/// 不再拖动整屏（含按钮/统计）每秒 setState 重建。
+class _CountdownRing extends StatefulWidget {
+  const _CountdownRing({
+    required this.totalSeconds,
+    required this.running,
+    required this.endsAt,
+    required this.frozenRemaining,
+    required this.isBreak,
+    required this.segment,
+    required this.taskTitle,
+    required this.onCompleted,
+  });
+
+  final int totalSeconds;
+  final bool running;
+  final DateTime? endsAt;
+  final int frozenRemaining;
+  final bool isBreak;
+
+  /// 段编号：同一秒内若剩余已到 0，只触发一次完成回调。
+  final int segment;
+  final String? taskTitle;
+  final VoidCallback onCompleted;
+
+  @override
+  State<_CountdownRing> createState() => _CountdownRingState();
+}
+
+class _CountdownRingState extends State<_CountdownRing> {
+  Timer? _timer;
+  int _firedSegment = -1;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+  }
+
+  void _tick() {
+    if (!mounted || !widget.running) return;
+    setState(() {}); // 只重建圆环与时间文本
+    if (_remaining <= 0 && _firedSegment != widget.segment) {
+      _firedSegment = widget.segment;
+      widget.onCompleted();
+    }
+  }
+
+  /// 剩余秒数：运行中按真实时间差计算（切后台回来依然准确），暂停显示冻结值。
+  int get _remaining {
+    if (!widget.running || widget.endsAt == null) return widget.frozenRemaining;
+    final r = widget.endsAt!.difference(DateTime.now()).inSeconds;
+    return r.clamp(0, widget.totalSeconds);
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final remaining = _remaining;
+    final m = (remaining ~/ 60).toString().padLeft(2, '0');
+    final s = (remaining % 60).toString().padLeft(2, '0');
+    return SizedBox(
+      width: 220,
+      height: 220,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          SizedBox(
+            width: 220,
+            height: 220,
+            child: CircularProgressIndicator(
+              value: widget.totalSeconds == 0
+                  ? 0
+                  : 1 - remaining / widget.totalSeconds,
+              strokeWidth: 10,
+              strokeCap: StrokeCap.round,
+              backgroundColor: theme.colorScheme.surfaceContainerHighest,
+              color: widget.isBreak
+                  ? const Color(0xFF2F9D45)
+                  : const Color(0xFFE04C4C),
+            ),
+          ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('$m:$s',
+                  style: theme.textTheme.displayMedium
+                      ?.copyWith(fontWeight: FontWeight.w700)),
+              if (!widget.isBreak && widget.taskTitle != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    widget.taskTitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.outline),
+                  ),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }

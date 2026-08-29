@@ -107,6 +107,36 @@ void main() {
       expect(next!.remindAt, expectedNextStart + (remindAt - baseEpoch));
     });
 
+    test('全天重复任务（无 dueTime）完成 → 提醒保留并推进到下一期', () async {
+      // 旧实现：无 dueTime 时下一期 remindAt 为 null，提醒整段丢失
+      final remindAt = DateUtilsEx.parseDate('2026-08-22')
+          .add(const Duration(hours: 9))
+          .millisecondsSinceEpoch;
+      final id = await seedTask(
+          repeatRule: 'FREQ=DAILY',
+          dueDate: '2026-08-22',
+          remindAt: remindAt);
+
+      final next = await repo.completeAndAdvance(id);
+
+      expect(
+          next!.remindAt,
+          DateUtilsEx.parseDate('2026-08-23')
+              .add(const Duration(hours: 9))
+              .millisecondsSinceEpoch);
+    });
+
+    test('dueTime 脏数据不中断完成操作', () async {
+      final id = await seedTask(
+          repeatRule: 'FREQ=DAILY',
+          dueDate: '2026-08-22',
+          dueTime: '垃圾');
+
+      final next = await repo.completeAndAdvance(id);
+
+      expect(next!.dueDate, '2026-08-23');
+    });
+
     test('无重复规则任务仅完成，返回 null', () async {
       final id = await seedTask(dueDate: '2026-08-22');
 

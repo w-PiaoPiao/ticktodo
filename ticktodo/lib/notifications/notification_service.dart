@@ -1,8 +1,10 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:ticktodo/core/logger.dart';
+import 'package:ticktodo/data/db/app_database.dart';
 import 'package:ticktodo/data/models/task.dart';
 import 'package:ticktodo/l10n/app_localizations.dart';
 
@@ -96,6 +98,43 @@ class NotificationService {
     await mac?.requestPermissions(alert: true, badge: true, sound: true);
   }
 
+  /// 精确闹钟调度：先尝试 exact（Doze 下到点即响），
+  /// 无权限/平台不支持时回退 inexact（宁可延迟也不丢提醒）。
+  Future<void> _zonedScheduleCompat({
+    required int id,
+    required String? title,
+    required String? body,
+    required tz.TZDateTime when,
+    required NotificationDetails details,
+    String? payload,
+  }) async {
+    try {
+      await _plugin.zonedSchedule(
+        id,
+        title,
+        body,
+        when,
+        details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        payload: payload,
+      );
+    } on PlatformException {
+      await _plugin.zonedSchedule(
+        id,
+        title,
+        body,
+        when,
+        details,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        payload: payload,
+      );
+    }
+  }
+
   /// 调度任务提醒；remindAt 已过则取消并返回 false。
   Future<bool> scheduleReminder(Task task) async {
     final remindAt = task.remindAt;
@@ -104,12 +143,12 @@ class NotificationService {
 
     final when = _tzDateTime(remindAt);
     try {
-      await _plugin.zonedSchedule(
-        task.id!,
-        task.title,
-        task.note.isEmpty ? _openTaskHint : task.note,
-        when,
-        NotificationDetails(
+      await _zonedScheduleCompat(
+        id: task.id!,
+        title: task.title,
+        body: task.note.isEmpty ? _openTaskHint : task.note,
+        when: when,
+        details: NotificationDetails(
           android: AndroidNotificationDetails(
             'task_reminders',
             _taskChannelName,
@@ -118,9 +157,6 @@ class NotificationService {
             priority: Priority.high,
           ),
         ),
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
         payload: '${task.id}',
       );
       return true;
@@ -179,15 +215,12 @@ class NotificationService {
     required DateTime at,
   }) async {
     try {
-      await _plugin.zonedSchedule(
-        pomodoroNotificationId,
-        title,
-        body,
-        _tzDateTime(at.millisecondsSinceEpoch),
-        _pomodoroDetails,
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
+      await _zonedScheduleCompat(
+        id: pomodoroNotificationId,
+        title: title,
+        body: body,
+        when: _tzDateTime(at.millisecondsSinceEpoch),
+        details: _pomodoroDetails,
       );
     } catch (e) {
       // 测试环境/平台异常静默
@@ -231,12 +264,12 @@ class NotificationService {
       final at = epochs[i];
       if (at <= DateTime.now().millisecondsSinceEpoch) continue;
       try {
-        await _plugin.zonedSchedule(
-          base + i,
-          title,
-          note,
-          _tzDateTime(at),
-          NotificationDetails(
+        await _zonedScheduleCompat(
+          id: base + i,
+          title: title,
+          body: note,
+          when: _tzDateTime(at),
+          details: NotificationDetails(
             android: AndroidNotificationDetails(
               'task_reminders',
               _taskChannelName,
@@ -245,9 +278,6 @@ class NotificationService {
               priority: Priority.high,
             ),
           ),
-          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-          uiLocalNotificationDateInterpretation:
-              UILocalNotificationDateInterpretation.absoluteTime,
           payload: '$taskId',
         );
       } catch (e) {
@@ -258,6 +288,50 @@ class NotificationService {
 
   Future<void> cancelAll() async {
     await _plugin.cancelAll();
+  }
+
+  /// 以数据库为准全量重排任务提醒（同步下载落库后调用）：
+  /// 其他设备新建的提醒要能在本机响铃，另一端完成/删除的任务要取消本机遗留调度。
+  /// 只动任务提醒 id 空间（taskId 与 taskId*1000+i），不碰番茄通知。
+  Future<void> rescheduleAllFromDb(AppDatabase appDb) async {
+    final db = appDb.db;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    // 圈定所有有提醒（主/额外）的任务，含已完成/已删除行——用于取消其遗留调度
+    final taskRows = await db.rawQuery('''
+      SELECT DISTINCT t.* FROM tasks t
+      WHERE t.remindAt IS NOT NULL
+         OR EXISTS (SELECT 1 FROM reminders r
+                    WHERE r.taskId = t.id AND r.deletedAt IS NULL)
+    ''');
+    final extraRows = await db.query('reminders',
+        where: 'deletedAt IS NULL AND remindAt > ?',
+        whereArgs: [now],
+        orderBy: 'remindAt ASC');
+    final extrasByTask = <int, List<int>>{};
+    for (final r in extraRows) {
+      extrasByTask
+          .putIfAbsent(r['taskId'] as int, () => [])
+          .add(r['remindAt'] as int);
+    }
+    for (final row in taskRows) {
+      final task = Task.fromMap(row);
+      if (task.id == null) continue;
+      // 先清掉本机现有调度（含额外槽位），再按库内当前状态重排
+      await cancelReminder(task.id!);
+      if (task.completed || task.isDeleted) continue;
+      if (task.remindAt != null && task.remindAt! > now) {
+        await scheduleReminder(task);
+      }
+      final epochs = extrasByTask[task.id];
+      if (epochs != null && epochs.isNotEmpty) {
+        await scheduleExtraReminders(
+          taskId: task.id!,
+          title: task.title,
+          note: task.note,
+          epochs: epochs,
+        );
+      }
+    }
   }
 
   tz.TZDateTime _tzDateTime(int ms) {

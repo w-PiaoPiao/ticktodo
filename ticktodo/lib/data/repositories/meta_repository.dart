@@ -113,7 +113,9 @@ class MetaRepository {
     await db.transaction((txn) async {
       await txn.update('tags', {'deletedAt': now, 'updatedAt': now},
           where: 'id = ?', whereArgs: [id]);
-      await txn.delete('task_tags', where: 'tagId = ?', whereArgs: [id]);
+      // 关联一并软删留墓碑：硬删行经同步合并会被远端复活
+      await txn.update('task_tags', {'deletedAt': now, 'updatedAt': now},
+          where: 'tagId = ? AND deletedAt IS NULL', whereArgs: [id]);
     });
   }
 
@@ -126,36 +128,60 @@ class MetaRepository {
   // ---------- 任务-标签关联 ----------
 
   Future<void> linkTaskTag(int taskId, int tagId) async {
-    await db.insert('task_tags',
-        TaskTagLink(taskId: taskId, tagId: tagId).toMap(),
+    // 带 updatedAt 且不带 deletedAt：重新添加要能胜过旧墓碑（LWW 取新）
+    await db.insert(
+        'task_tags',
+        TaskTagLink(taskId: taskId, tagId: tagId, updatedAt: _now()).toMap(),
         conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<void> unlinkTaskTag(int taskId, int tagId) async {
-    await db.delete('task_tags',
+    // 软删留墓碑：取消标签要作为事件同步到其他设备
+    final now = _now();
+    final updated = await db.update('task_tags', {'deletedAt': now, 'updatedAt': now},
         where: 'taskId = ? AND tagId = ?', whereArgs: [taskId, tagId]);
+    if (updated == 0) {
+      // 本地没有该关联行：写入纯墓碑，保证删除事件仍可传播到远端
+      await db.insert(
+          'task_tags',
+          TaskTagLink(taskId: taskId, tagId: tagId, updatedAt: now, deletedAt: now)
+              .toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
   }
 
   Future<void> setTaskTags(int taskId, List<int> tagIds) async {
+    final now = _now();
     await db.transaction((txn) async {
-      await txn.delete('task_tags', where: 'taskId = ?', whereArgs: [taskId]);
-      final batch = txn.batch();
-      for (final tagId in tagIds) {
-        batch.insert(
-            'task_tags', TaskTagLink(taskId: taskId, tagId: tagId).toMap());
+      final existing = await txn.query('task_tags',
+          columns: ['tagId'],
+          where: 'taskId = ? AND deletedAt IS NULL',
+          whereArgs: [taskId]);
+      final removed = existing
+          .map((r) => r['tagId'] as int)
+          .where((id) => !tagIds.contains(id))
+          .toList();
+      for (final tagId in removed) {
+        await txn.update('task_tags', {'deletedAt': now, 'updatedAt': now},
+            where: 'taskId = ? AND tagId = ?', whereArgs: [taskId, tagId]);
       }
-      await batch.commit(noResult: true);
+      for (final tagId in tagIds) {
+        await txn.insert(
+            'task_tags',
+            TaskTagLink(taskId: taskId, tagId: tagId, updatedAt: now).toMap(),
+            conflictAlgorithm: ConflictAlgorithm.replace);
+      }
     });
   }
 
   Future<List<int>> tagIdsOfTask(int taskId) async {
     final rows = await db.query('task_tags',
-        where: 'taskId = ?', whereArgs: [taskId]);
+        where: 'taskId = ? AND deletedAt IS NULL', whereArgs: [taskId]);
     return rows.map((r) => r['tagId'] as int).toList();
   }
 
   Future<Map<int, List<int>>> allTaskTagLinks() async {
-    final rows = await db.query('task_tags');
+    final rows = await db.query('task_tags', where: 'deletedAt IS NULL');
     final map = <int, List<int>>{};
     for (final r in rows) {
       map.putIfAbsent(r['taskId'] as int, () => []).add(r['tagId'] as int);

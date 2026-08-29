@@ -29,10 +29,13 @@ class SyncSettings {
   int? get lastSyncAt => _prefs.getInt(_kLastSync);
 
   /// 从安全存储加载凭据到内存（main 启动时调用）。
+  /// 三项读取互不依赖，并行执行（安全存储读可能各需几十毫秒）。
   Future<void> load() async {
-    _url = await _store.read(_kUrl);
-    _user = await _store.read(_kUser);
-    _pass = await _store.read(_kPass);
+    final reads =
+        await Future.wait([_store.read(_kUrl), _store.read(_kUser), _store.read(_kPass)]);
+    _url = reads[0];
+    _user = reads[1];
+    _pass = reads[2];
   }
 
   bool get hasCredentials =>

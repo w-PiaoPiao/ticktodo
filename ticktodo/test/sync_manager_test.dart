@@ -108,13 +108,14 @@ void main() {
     expect((await repo.queryAll()).single.title, '远端任务');
   });
 
-  test('本地新（远超过窗口）→ 上传本地', () async {
+  test('revision 差距大 → 仍逐条合并，不再整库覆盖', () async {
     final now = DateTime.now().millisecondsSinceEpoch;
-    await repo.upsertTask(Task(title: '本地任务', listId: 1));
+    await repo.upsertTask(Task(title: '本地任务', listId: 1, updatedAt: now));
     final remoteSnap = SyncSnapshot(
       revision: now - Duration(hours: 2).inMilliseconds,
       tasks: [
         Task(id: 1, title: '旧远端', listId: 1, updatedAt: now - 2 * 3600000),
+        Task(id: 2, title: '远端独有', listId: 1, updatedAt: now - 3600000),
       ],
       subtasks: const [],
       lists: const [],
@@ -131,8 +132,70 @@ void main() {
     });
     final m = managerWith(mock);
     final result = await m.syncNow();
-    expect(result.didUpload, true);
-    expect((await repo.queryAll()).single.title, '本地任务');
+    expect(result.merged, true);
+    // 本地较新的记录按 LWW 保留；远端独有的记录不再被整库覆盖丢弃
+    final all = await repo.queryAll();
+    expect(all.map((t) => t.title), containsAll(['本地任务', '远端独有']));
+    expect(all.where((t) => t.id == 1).single.title, '本地任务');
+  });
+
+  test('冷启动 revision 归零：空库也不会整库覆盖远端', () async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    // 远端快照超 5 分钟未更新；本地为空库。旧实现会凭 now() 判定
+    // "本地新"而把远端整库清掉；现在必须走合并，远端数据落到本地。
+    final remoteSnap = SyncSnapshot(
+      revision: now - Duration(hours: 2).inMilliseconds,
+      tasks: [
+        Task(id: 7, title: '他端任务', listId: 1, updatedAt: now - 2 * 3600000),
+      ],
+      subtasks: const [],
+      lists: const [],
+      tags: const [],
+      taskTags: const [],
+    );
+    final mock = MockClient((request) async {
+      requests.add(request);
+      if (request.method == 'GET') {
+        return http.Response.bytes(
+            Uint8List.fromList(gzipEncode(remoteSnap.encode())), 200);
+      }
+      return http.Response('ok', 201);
+    });
+    final m = managerWith(mock);
+    final result = await m.syncNow();
+    expect(result.merged, true);
+    expect((await repo.queryAll()).single.title, '他端任务');
+    // 上传的是合并结果，远端数据仍在云端
+    final put = requests.firstWhere((r) => r.method == 'PUT');
+    final uploaded = SyncSnapshot.fromJson(
+        jsonDecode(gzipDecode(put.bodyBytes)) as Map<String, dynamic>);
+    expect(uploaded.tasks.single.title, '他端任务');
+  });
+
+  test('快照落库后触发 onSnapshotApplied（重排通知/刷新 UI 用）', () async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final remoteSnap = SyncSnapshot(
+      revision: now,
+      tasks: [
+        Task(id: 1, title: '远端任务', listId: 1, updatedAt: now),
+      ],
+      subtasks: const [],
+      lists: const [],
+      tags: const [],
+      taskTags: const [],
+    );
+    final mock = MockClient((request) async {
+      requests.add(request);
+      if (request.method == 'GET') {
+        return http.Response.bytes(
+            Uint8List.fromList(gzipEncode(remoteSnap.encode())), 200);
+      }
+      return http.Response('ok', 201);
+    });
+    var applied = 0;
+    final m = managerWith(mock)..onSnapshotApplied = () => applied++;
+    await m.syncNow();
+    expect(applied, 1);
   });
 
   test('凭据持久化（setCredentials 写入安全存储并更新内存缓存）', () async {

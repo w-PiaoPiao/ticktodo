@@ -6,7 +6,7 @@ class AppDatabase {
 
   final Database db;
 
-  static const _version = 4;
+  static const _version = 5;
 
   static Future<AppDatabase> open({String? inMemoryPath}) async {
     final path = inMemoryPath ??
@@ -20,6 +20,7 @@ class AppDatabase {
         if (oldV >= 1 && oldV < 2) await migrateV1To2(db);
         if (oldV >= 2 && oldV < 3) await migrateV2To3(db);
         if (oldV >= 3 && oldV < 4) await migrateV3To4(db);
+        if (oldV >= 4 && oldV < 5) await migrateV4To5(db);
       },
     );
     return AppDatabase(db);
@@ -92,6 +93,20 @@ class AppDatabase {
   /// v3 → v4：习惯打卡 + 番茄专注
   static Future<void> migrateV3To4(DatabaseExecutor db) async {
     await _createHabitTables(db);
+  }
+
+  /// v4 → v5：task_tags 新增 updatedAt/deletedAt。
+  /// 取消标签要以"墓碑"参与同步合并（否则取消永远无法跨设备同步，
+  /// 合并时会被并集复活），与 tasks/habits 同一套软删模式。
+  /// 顺带补齐高频查询索引（本版本内发布，不再单独升版）。
+  static Future<void> migrateV4To5(DatabaseExecutor db) async {
+    await db.execute('ALTER TABLE task_tags ADD COLUMN updatedAt INTEGER');
+    await db.execute('ALTER TABLE task_tags ADD COLUMN deletedAt INTEGER');
+    await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_task_tags_tagId ON task_tags(tagId)');
+    await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_tasks_completed_updated '
+        'ON tasks(completed, updatedAt)');
   }
 
   static Future<void> _createHabitTables(DatabaseExecutor db) async {
@@ -197,12 +212,17 @@ class AppDatabase {
       CREATE TABLE task_tags (
         taskId INTEGER NOT NULL,
         tagId INTEGER NOT NULL,
+        updatedAt INTEGER,
+        deletedAt INTEGER,
         PRIMARY KEY (taskId, tagId)
       )
     ''');
     await db.execute('CREATE INDEX idx_tasks_dueDate ON tasks(dueDate)');
     await db.execute('CREATE INDEX idx_tasks_listId ON tasks(listId)');
+    await db.execute(
+        'CREATE INDEX idx_tasks_completed_updated ON tasks(completed, updatedAt)');
     await db.execute('CREATE INDEX idx_subtasks_taskId ON subtasks(taskId)');
+    await db.execute('CREATE INDEX idx_task_tags_tagId ON task_tags(tagId)');
     await db.execute('''
       CREATE TABLE IF NOT EXISTS reminders (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

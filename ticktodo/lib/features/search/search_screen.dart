@@ -21,16 +21,18 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   final _controller = TextEditingController();
   Timer? _debounce;
   List<Task>? _results;
+  ProviderSubscription<int>? _mutationSub;
 
   @override
   void initState() {
     super.initState();
     // 任务变更（完成/删除/编辑）后自动刷新搜索结果
-    ref.listenManual(taskMutationProvider, (_, _) => _search());
+    _mutationSub = ref.listenManual(taskMutationProvider, (_, _) => _search());
   }
 
   @override
   void dispose() {
+    _mutationSub?.close();
     _debounce?.cancel();
     _controller.dispose();
     super.dispose();

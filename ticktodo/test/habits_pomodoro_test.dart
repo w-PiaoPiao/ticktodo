@@ -83,6 +83,29 @@ void main() {
     });
   });
 
+  group('habitsWithStats 批量统计', () {
+    test('一次查询派生 今日打卡/连续天数/本周次数/近5周日期', () async {
+      final a = (await habits.upsertHabit(const Habit(name: 'A')))!;
+      final b = (await habits.upsertHabit(const Habit(name: 'B')))!;
+      await habits.toggleCheck(a, '2026-08-22'); // 今天
+      await habits.toggleCheck(a, '2026-08-21'); // 昨天
+      await habits.toggleCheck(a, '2026-08-03'); // 两周前
+      await habits.toggleCheck(b, '2026-08-10');
+      await habits.toggleCheck(b, '2026-08-10'); // 取消
+
+      final rows = await habits.habitsWithStats(now: DateTime(2026, 8, 22));
+      expect(rows.length, 2);
+      final ra = rows.firstWhere((r) => r.habit.id == a);
+      final rb = rows.firstWhere((r) => r.habit.id == b);
+      expect(ra.checkedToday, isTrue);
+      expect(ra.streak, 2); // 今天+昨天
+      expect(ra.weekCount, 2); // 本周（周一 08-17 起）
+      expect(ra.recentDates, contains('2026-08-03'));
+      expect(rb.checkedToday, isFalse);
+      expect(rb.streak, 0); // 今天没有打卡
+    });
+  });
+
   group('连续天数 streak', () {
     final base = DateTime(2026, 8, 22); // 周六
 

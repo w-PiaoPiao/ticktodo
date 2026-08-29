@@ -73,7 +73,7 @@ void main() {
         updatedAt: now,
         deletedAt: now,
       ).toMap());
-      final snap = await buildSnapshot(appDb, 0, now: () => now);
+      final snap = await buildSnapshot(appDb, 0);
       expect(snap.tasks.single.isDeleted, true);
 
       await appDb.db.delete('tasks');
@@ -83,10 +83,45 @@ void main() {
       expect(Task.fromMap(restored.first).isDeleted, true);
     });
 
-    test('空表不崩，revision 取 now', () async {
-      final snap = await buildSnapshot(appDb, 0, now: () => 42);
+    test('空表不崩，revision 取真实最大 updatedAt（不再伪造 now）', () async {
+      final snap = await buildSnapshot(appDb, 0);
       expect(snap.tasks, isEmpty);
-      expect(snap.revision, 42);
+      expect(snap.revision, 0);
+    });
+
+    test('task_tags 墓碑入快照并还原', () async {      await appDb.db.insert('task_tags',
+          {'taskId': 1, 'tagId': 2, 'updatedAt': 100, 'deletedAt': 100});
+      final snap = await buildSnapshot(appDb, 0);
+      expect(snap.taskTags.single.isDeleted, true);
+
+      await appDb.db.delete('task_tags');
+      await applySnapshot(appDb, snap);
+      final rows = await appDb.db.query('task_tags');
+      expect(rows.single['deletedAt'], 100);
+    });
+
+    test('merge 后 applySnapshot 不丢本地独有 habits/reminders（整表替换放大器回归）', () async {
+      await appDb.db.insert('habits', {'name': '本地习惯', 'updatedAt': 100});
+      await appDb.db
+          .insert('reminders', {'taskId': 1, 'remindAt': 123, 'updatedAt': 100});
+      final local = await buildSnapshot(appDb, 0);
+      final remote = SyncSnapshot(
+        revision: 5,
+        tasks: [
+          Task(id: 9, title: '远端任务', listId: 1, updatedAt: 100),
+        ],
+        subtasks: const [],
+        lists: const [],
+        tags: const [],
+        taskTags: const [],
+      );
+      final merged = mergeSnapshots(local, remote);
+      await applySnapshot(appDb, merged);
+
+      // 整表 delete+insert 只作用于合并结果（local∪remote 超集），本地独有行必须幸存
+      expect((await appDb.db.query('habits')).single['name'], '本地习惯');
+      expect((await appDb.db.query('reminders')), isNotEmpty);
+      expect((await appDb.db.query('tasks')).single['title'], '远端任务');
     });
   });
 
@@ -136,11 +171,71 @@ void main() {
       expect(m.tasks.length, 2);
     });
 
-    test('taskTags union 去重', () {
-      final a = SyncSnapshot(revision: 1, tasks: [], subtasks: [], lists: [], tags: [], taskTags: [TaskTagLink(taskId: 1, tagId: 1)]);
-      final b = SyncSnapshot(revision: 2, tasks: [], subtasks: [], lists: [], tags: [], taskTags: [TaskTagLink(taskId: 1, tagId: 2)]);
+    test('taskTags：取消标签（墓碑）胜过旧链接，删除事件可同步', () {
+      final a = SyncSnapshot(
+          revision: 1,
+          tasks: const [],
+          subtasks: const [],
+          lists: const [],
+          tags: const [],
+          taskTags: [TaskTagLink(taskId: 1, tagId: 3, updatedAt: 100)]);
+      final b = SyncSnapshot(
+          revision: 2,
+          tasks: const [],
+          subtasks: const [],
+          lists: const [],
+          tags: const [],
+          taskTags: [
+            TaskTagLink(taskId: 1, tagId: 3, updatedAt: 200, deletedAt: 200)
+          ]);
+      final m = mergeSnapshots(a, b);
+      expect(m.taskTags.single.isDeleted, true);
+    });
+
+    test('taskTags：重新添加胜过墓碑', () {
+      final a = SyncSnapshot(
+          revision: 1,
+          tasks: const [],
+          subtasks: const [],
+          lists: const [],
+          tags: const [],
+          taskTags: [
+            TaskTagLink(taskId: 1, tagId: 3, updatedAt: 200, deletedAt: 200)
+          ]);
+      final b = SyncSnapshot(
+          revision: 2,
+          tasks: const [],
+          subtasks: const [],
+          lists: const [],
+          tags: const [],
+          taskTags: [TaskTagLink(taskId: 1, tagId: 3, updatedAt: 300)]);
+      final m = mergeSnapshots(a, b);
+      expect(m.taskTags.single.isDeleted, false);
+    });
+
+    test('taskTags：同一关联对 LWW 去重，不同关联对共存', () {
+      final a = SyncSnapshot(
+          revision: 1,
+          tasks: const [],
+          subtasks: const [],
+          lists: const [],
+          tags: const [],
+          taskTags: [
+            TaskTagLink(taskId: 1, tagId: 3, updatedAt: 100),
+            TaskTagLink(taskId: 2, tagId: 4, updatedAt: 100),
+          ]);
+      final b = SyncSnapshot(
+          revision: 2,
+          tasks: const [],
+          subtasks: const [],
+          lists: const [],
+          tags: const [],
+          taskTags: [TaskTagLink(taskId: 1, tagId: 3, updatedAt: 50)]);
       final m = mergeSnapshots(a, b);
       expect(m.taskTags.length, 2);
+      expect(
+          m.taskTags.firstWhere((l) => l.taskId == 1 && l.tagId == 3).updatedAt,
+          100);
     });
   });
 }

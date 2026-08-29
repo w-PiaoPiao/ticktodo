@@ -104,6 +104,12 @@ final listsProvider = FutureProvider<List<ListModel>>((ref) async {
   return ref.read(metaRepoProvider).queryLists();
 });
 
+/// 各清单未删除任务数（清单管理页 subtitle，单条 GROUP BY 查询）。
+final taskCountsByListProvider = FutureProvider<Map<int, int>>((ref) async {
+  ref.watch(taskMutationProvider);
+  return ref.read(taskRepoProvider).taskCountsByList();
+});
+
 final tagsProvider = FutureProvider<List<Tag>>((ref) async {
   ref.watch(taskMutationProvider);
   return ref.read(metaRepoProvider).queryTags();

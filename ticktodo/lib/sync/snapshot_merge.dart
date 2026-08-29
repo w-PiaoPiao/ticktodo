@@ -90,9 +90,26 @@ int? _idOf(dynamic item) {
   return null;
 }
 
+/// task_tags 按关联对 (taskId, tagId) 做 LWW：墓碑行（deletedAt 非空）与
+/// 正常行同台比较 updatedAt，"取消标签"才能作为事件同步到其他设备；
+/// 重新添加时 updatedAt 更新，自然胜过旧墓碑。
 List<TaskTagLink> _mergeLinks(List<TaskTagLink> local, List<TaskTagLink> remote) {
-  final set = <TaskTagLink>{...local, ...remote};
-  final list = set.toList();
+  TaskTagLink pick(TaskTagLink a, TaskTagLink b) =>
+      (a.updatedAt ?? 0) >= (b.updatedAt ?? 0) ? a : b;
+  final byPair = <String, TaskTagLink>{};
+  void put(TaskTagLink l) {
+    final key = '${l.taskId}:${l.tagId}';
+    final existing = byPair[key];
+    byPair[key] = existing == null ? l : pick(existing, l);
+  }
+
+  for (final l in local) {
+    put(l);
+  }
+  for (final l in remote) {
+    put(l);
+  }
+  final list = byPair.values.toList();
   list.sort((a, b) =>
       a.taskId != b.taskId ? a.taskId.compareTo(b.taskId) : a.tagId.compareTo(b.tagId));
   return list;

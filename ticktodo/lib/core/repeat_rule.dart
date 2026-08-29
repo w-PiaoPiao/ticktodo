@@ -15,6 +15,7 @@ class RepeatRule {
     required this.freq,
     this.interval = 1,
     this.byWeekdays = const {},
+    this.monthDay,
   });
 
   /// 频率。
@@ -25,6 +26,10 @@ class RepeatRule {
 
   /// 生效星期（DateTime.weekday：1=周一 … 7=周日）；空集合=跟随原日期的星期。
   final Set<int> byWeekdays;
+
+  /// 月重复的锚定日（1..31）：月末钳制时保持原"几号"不漂移
+  /// （1/31 → 2/28 → 3/31，而非 3/28）。null=跟随当前到期日（旧行为）。
+  final int? monthDay;
 
   static const _codeOf = {
     1: 'MO', 2: 'TU', 3: 'WE', 4: 'TH', 5: 'FR', 6: 'SA', 7: 'SU',
@@ -52,6 +57,9 @@ class RepeatRule {
       final days = byWeekdays.toList()..sort();
       parts.add('BYDAY=${days.map((d) => _codeOf[d]).join(',')}');
     }
+    if (freq == RepeatFreq.monthly && monthDay != null) {
+      parts.add('BYMONTHDAY=$monthDay');
+    }
     return parts.join(';');
   }
 
@@ -60,6 +68,7 @@ class RepeatRule {
     RepeatFreq? freq;
     var interval = 1;
     var byDays = <int>{};
+    int? monthDay;
     for (final part in raw.split(';')) {
       final i = part.indexOf('=');
       if (i <= 0) continue;
@@ -83,10 +92,14 @@ class RepeatRule {
               .map((s) => _dayOfCode[s.trim().toUpperCase()])
               .whereType<int>()
               .toSet();
+        case 'BYMONTHDAY':
+          final d = int.tryParse(value);
+          monthDay = (d != null && d >= 1 && d <= 31) ? d : null;
       }
     }
     if (freq == null) return null;
-    return RepeatRule(freq: freq, interval: interval, byWeekdays: byDays);
+    return RepeatRule(
+        freq: freq, interval: interval, byWeekdays: byDays, monthDay: monthDay);
   }
 
   /// 本地化标签（列表行与详情页展示）。
@@ -138,14 +151,25 @@ class RepeatRule {
           return DateTime(currentDue.year, currentDue.month,
               currentDue.day + 7 * interval);
         }
-        var d =
-            DateTime(currentDue.year, currentDue.month, currentDue.day + 1);
-        for (var i = 0; i < 8 * interval + 7; i++) {
-          if (byWeekdays.contains(d.weekday)) return d;
-          d = DateTime(d.year, d.month, d.day + 1);
+        // 锚定当前周（周一为一周起点）：先在本周剩余日里找下一个命中日，
+        // 找不到则跳到第 interval 周后的第一个命中日——保证"每 N 周"
+        // 的跨周间隔语义（旧实现会退化为每周都有）。
+        for (var d = 1; d <= 7 - currentDue.weekday; d++) {
+          final cand =
+              DateTime(currentDue.year, currentDue.month, currentDue.day + d);
+          if (byWeekdays.contains(cand.weekday)) return cand;
+        }
+        final nextWeekMonday = DateTime(
+            currentDue.year,
+            currentDue.month,
+            currentDue.day - (currentDue.weekday - 1) + 7 * interval);
+        for (var i = 0; i < 7; i++) {
+          final cand = DateTime(nextWeekMonday.year, nextWeekMonday.month,
+              nextWeekMonday.day + i);
+          if (byWeekdays.contains(cand.weekday)) return cand;
         }
         return DateTime(currentDue.year, currentDue.month,
-            currentDue.day + 7 * interval); // 兜底
+            currentDue.day + 7 * interval); // 兜底（不可达：集合非空必有一命中）
       case RepeatFreq.monthly:
         var y = currentDue.year;
         var m = currentDue.month + interval;
@@ -154,7 +178,9 @@ class RepeatRule {
           y++;
         }
         final lastDay = DateTime(y, m + 1, 0).day;
-        final day = currentDue.day > lastDay ? lastDay : currentDue.day;
+        // 有锚定日（BYMONTHDAY）按锚钳制：短月钳到月末但不丢失原"几号"
+        final anchor = monthDay ?? currentDue.day;
+        final day = anchor > lastDay ? lastDay : anchor;
         return DateTime(y, m, day);
       case RepeatFreq.yearly:
         final y = currentDue.year + interval;
@@ -169,12 +195,13 @@ class RepeatRule {
       other is RepeatRule &&
       other.freq == freq &&
       other.interval == interval &&
+      other.monthDay == monthDay &&
       _sameSet(other.byWeekdays, byWeekdays);
 
   @override
   int get hashCode {
     final days = (byWeekdays.toList()..sort()).join(',');
-    return Object.hash(freq, interval, days);
+    return Object.hash(freq, interval, days, monthDay);
   }
 }
 

@@ -80,7 +80,7 @@ class FilterRepository {
     if (filter.tagIds.isNotEmpty) {
       final ph = List.filled(filter.tagIds.length, '?').join(',');
       where +=
-          ' AND EXISTS (SELECT 1 FROM task_tags tt WHERE tt.taskId = t.id AND tt.tagId IN ($ph))';
+          ' AND EXISTS (SELECT 1 FROM task_tags tt WHERE tt.taskId = t.id AND tt.deletedAt IS NULL AND tt.tagId IN ($ph))';
       args.addAll(filter.tagIds);
     }
 

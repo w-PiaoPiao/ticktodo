@@ -89,11 +89,12 @@ class SyncSnapshot {
 }
 
 /// 从数据库构建完整快照（含软删除记录）。
+/// [revision] 为本地最近写操作时间（毫秒），仅与表内最大 updatedAt 取大后
+/// 作诊断用途——不再用 now() 兜底，避免重启后 revision 被凭空抬高。
 Future<SyncSnapshot> buildSnapshot(
   AppDatabase appDb,
-  int revision, {
-  int Function()? now,
-}) async {
+  int revision,
+) async {
   final tasks = await appDb.db
       .query('tasks')
       .then((rows) => rows.map(Task.fromMap).toList());
@@ -136,9 +137,9 @@ Future<SyncSnapshot> buildSnapshot(
   ].fold<int?>(null, (a, b) => a == null || (b != null && b > a) ? b : a);
 
   return SyncSnapshot(
-    revision: revision > (maxUpdated ?? 0)
-        ? revision
-        : (now?.call() ?? DateTime.now().millisecondsSinceEpoch),
+    // revision 仅作诊断：恒等于本地真实最大 updatedAt，不用 now() 兜底——
+    // 否则重启后（内存计数归零）revision 被凭空抬高，同步会被误判为"本地更新"。
+    revision: revision > (maxUpdated ?? 0) ? revision : (maxUpdated ?? 0),
     tasks: tasks,
     subtasks: subtasks,
     lists: lists,

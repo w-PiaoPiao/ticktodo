@@ -62,6 +62,35 @@ void main() {
       expect(r.nextDue(DateTime(2026, 8, 19)), DateTime(2026, 8, 24));
     });
 
+    test('每 2 周周一：下一期隔一周（不再退化为每周一）', () {
+      const r =
+          RepeatRule(freq: RepeatFreq.weekly, interval: 2, byWeekdays: {1});
+      // 2026-08-03 是周一
+      expect(r.nextDue(DateTime(2026, 8, 3)), DateTime(2026, 8, 17));
+    });
+
+    test('每 2 周周一+周三：同周内先走周三，再跳两周后的周一', () {
+      const r =
+          RepeatRule(freq: RepeatFreq.weekly, interval: 2, byWeekdays: {1, 3});
+      // 2026-08-03 周一 → 本周周三
+      expect(r.nextDue(DateTime(2026, 8, 3)), DateTime(2026, 8, 5));
+      // 周三 → 下一命中日在两周后的那一周
+      expect(r.nextDue(DateTime(2026, 8, 5)), DateTime(2026, 8, 17));
+    });
+
+    test('每月 BYMONTHDAY 锚：1/31 → 2/28 → 3/31（不漂移）', () {
+      final r = RepeatRule.parse('FREQ=MONTHLY;BYMONTHDAY=31');
+      expect(r!.nextDue(DateTime(2026, 1, 31)), DateTime(2026, 2, 28));
+      expect(r.nextDue(DateTime(2026, 2, 28)), DateTime(2026, 3, 31));
+    });
+
+    test('BYMONTHDAY 非法值忽略', () {
+      expect(
+          RepeatRule.parse('FREQ=MONTHLY;BYMONTHDAY=99')!.monthDay, isNull);
+      expect(
+          RepeatRule.parse('FREQ=MONTHLY;BYMONTHDAY=abc')!.monthDay, isNull);
+    });
+
     test('每月：月末钳制 1/31 → 2/28', () {
       const r = RepeatRule(freq: RepeatFreq.monthly);
       expect(r.nextDue(DateTime(2026, 1, 31)), DateTime(2026, 2, 28));

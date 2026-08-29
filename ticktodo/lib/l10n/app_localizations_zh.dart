@@ -96,6 +96,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get untitledTask => '无标题任务';
 
   @override
+  String get taskNotFound => '任务不存在或已删除';
+
+  @override
   String get todayEmptyTitle => '今天没有任务';
 
   @override

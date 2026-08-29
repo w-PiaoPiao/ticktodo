@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:ticktodo/app.dart';
 import 'package:ticktodo/backup/local_backup.dart';
+import 'package:ticktodo/core/constants.dart';
 import 'package:ticktodo/core/logger.dart';
 import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/data/db/app_database.dart';
@@ -31,11 +32,17 @@ Future<void> main() async {
     databaseFactory = databaseFactoryFfi;
   }
 
-  final prefs = await SharedPreferences.getInstance();
+  final sysLocale = PlatformDispatcher.instance.locale;
+  // 互不依赖的初始化并行执行：冷启动耗时 = 最慢一项而非串行之和
+  final prefsF = SharedPreferences.getInstance();
+  final appDbF = AppDatabase.open();
+  final notifL10nF = _loadNotifL10n(sysLocale);
+  final prefs = await prefsF;
+  final appDb = await appDbF;
+  final notifL10n = await notifL10nF;
   final settings = SyncSettings(prefs, SecureCredentialStore());
   await settings.load();
   await settings.migrateLegacyPrefs();
-  final appDb = await AppDatabase.open();
   final localBackup = LocalBackupManager(appDb: appDb, prefs: prefs);
   final taskRepo = TaskRepository(appDb);
   final syncManager = SyncManager(
@@ -45,17 +52,10 @@ Future<void> main() async {
   );
   syncManager.refreshClient();
   // 通知文案跟随系统语言（否则回退中文）
-  final sysLocale = PlatformDispatcher.instance.locale;
-  AppLocalizations? notifL10n;
-  try {
-    notifL10n = await AppLocalizations.delegate.load(sysLocale);
-  } catch (_) {
-    notifL10n = null;
-  }
   final notifications = NotificationService(l10n: notifL10n);
+  // 冷启动通知跳转依赖 init 完成（读 initialTaskId），权限申请移到首帧之后
   try {
     await notifications.init();
-    await notifications.requestPermissions();
   } catch (e) {
     AppLogger.warn('main.initNotifications', '$e');
   }
@@ -70,14 +70,24 @@ Future<void> main() async {
   notifications.onNotificationTap = openTaskFromNotification;
   final launchTaskId = notifications.initialTaskId;
 
-  runApp(ProviderScope(
-    overrides: [
-      appDbProvider.overrideWithValue(appDb),
-      syncSettingsProvider.overrideWithValue(settings),
-      syncManagerProvider.overrideWithValue(syncManager),
-      notificationServiceProvider.overrideWithValue(notifications),
-      localBackupProvider.overrideWithValue(localBackup),
-    ],
+  // 显式创建容器：同步落库回调需要在 Widget 树之外读 provider 刷新视图
+  final container = ProviderContainer(overrides: [
+    appDbProvider.overrideWithValue(appDb),
+    syncSettingsProvider.overrideWithValue(settings),
+    syncManagerProvider.overrideWithValue(syncManager),
+    notificationServiceProvider.overrideWithValue(notifications),
+    localBackupProvider.overrideWithValue(localBackup),
+  ]);
+
+  // 同步快照落库后：重排本机通知（其他设备新建的提醒要响、
+  // 另一端完成/删除的要取消）+ 刷新视图（下载的变更否则不可见）
+  syncManager.onSnapshotApplied = () {
+    unawaitedSync(notifications.rescheduleAllFromDb(appDb));
+    container.read(taskMutationProvider.notifier).state++;
+  };
+
+  runApp(UncontrolledProviderScope(
+    container: container,
     child: TickTodoApp(
       initialTaskId: launchTaskId,
       onOpenTask: openTaskFromNotification,
@@ -86,15 +96,24 @@ Future<void> main() async {
 
   // 打开 App 自动同步（不阻塞启动）
   unawaitedSync(syncManager.syncNow());
+  // 通知权限弹窗不阻塞首帧，首帧后再请求
+  unawaitedSync(notifications.requestPermissions());
   // 自动本地备份（超 24h 才执行）
   unawaitedSync(localBackup.autoBackupIfDue());
-  // 自动清理回收站中删除超过 30 天的数据（任务/习惯/打卡/番茄会话）
-  unawaitedSync(
-      taskRepo.purgeDeleted(olderThanMs: 30 * 24 * 3600 * 1000));
-  unawaitedSync(HabitRepository(appDb)
-      .purgeDeleted(olderThanMs: 30 * 24 * 3600 * 1000));
-  unawaitedSync(PomodoroRepository(appDb)
-      .purgeDeleted(olderThanMs: 30 * 24 * 3600 * 1000));
+  // 自动清理超过墓碑保留期的软删数据（任务/习惯/打卡/番茄会话）
+  final retentionMs = kTombstoneRetention.inMilliseconds;
+  unawaitedSync(taskRepo.purgeDeleted(olderThanMs: retentionMs));
+  unawaitedSync(HabitRepository(appDb).purgeDeleted(olderThanMs: retentionMs));
+  unawaitedSync(PomodoroRepository(appDb).purgeDeleted(olderThanMs: retentionMs));
+}
+
+/// 通知频道文案的本地化源；失败回退中文。
+Future<AppLocalizations?> _loadNotifL10n(Locale locale) async {
+  try {
+    return await AppLocalizations.delegate.load(locale);
+  } catch (_) {
+    return null;
+  }
 }
 
 void unawaitedSync(Future<void> f) {

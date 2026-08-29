@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ticktodo/core/constants.dart';
@@ -32,10 +34,36 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
   List<int> _tagIds = [];
   bool _loaded = false;
 
+  late final TextEditingController _titleController;
+  late final TextEditingController _noteController;
+  // 防抖窗口内尚未落库的最新编辑
+  Task? _pendingSave;
+  Timer? _saveDebounce;
+  // 最近一次已落库状态（主提醒变更检测的基准）
+  Task? _lastSaved;
+  // 保存串行化队列：后到的编辑永远后落库，避免并发写乱序回退
+  Future<void> _saveQueue = Future.value();
+
   @override
   void initState() {
     super.initState();
+    _titleController = TextEditingController();
+    _noteController = TextEditingController();
     _init();
+  }
+
+  @override
+  void dispose() {
+    _saveDebounce?.cancel();
+    // 防抖窗口内还有未落库的编辑 → 退出前补写
+    final pending = _pendingSave;
+    final repo = ref.read(taskRepoProvider);
+    if (pending != null && pending.id != null) {
+      _saveQueue = _saveQueue.then((_) => repo.upsertTask(pending));
+    }
+    _titleController.dispose();
+    _noteController.dispose();
+    super.dispose();
   }
 
   Future<void> _init() async {
@@ -53,38 +81,125 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
       }
       final id = await repo.upsertTask(task);
       task = (await repo.getTask(id!))!;
+      _titleController.text = task.title;
+      _noteController.text = task.note;
       setState(() {
         _task = task;
+        _lastSaved = task;
         _loaded = true;
       });
     } else {
       final task = await repo.getTask(widget.taskId);
       final tagIds = await meta.tagIdsOfTask(widget.taskId);
+      if (task != null) {
+        _titleController.text = task.title;
+        _noteController.text = task.note;
+      }
       setState(() {
         _task = task;
+        _lastSaved = task;
         _tagIds = tagIds;
         _loaded = true;
       });
     }
   }
 
+  static const _saveDebounceDuration = Duration(milliseconds: 500);
+
+  /// 文本框输入：只更新内存态并防抖落库，不逐键写库。
+  void _textChanged() {
+    final current = _task;
+    if (current == null) return;
+    final updated = current.copyWith(
+        title: _titleController.text, note: _noteController.text);
+    _pendingSave = updated;
+    setState(() => _task = updated);
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(_saveDebounceDuration, _flushSave);
+  }
+
+  /// 结构化编辑（日期/优先级/重复等）：立即落库，并合并文本框中尚未保存的输入。
   Future<void> _save(Task updated) async {
     if (updated.id == null) return;
+    updated =
+        updated.copyWith(title: _titleController.text, note: _noteController.text);
+    _saveDebounce?.cancel();
+    _pendingSave = null;
+    if (mounted) setState(() => _task = updated);
+    await _enqueueSave(updated);
+    if (!mounted) return;
+    bumpMutation(ref);
+  }
+
+  Future<void> _flushSave() async {
+    final updated = _pendingSave;
+    if (updated == null) return;
+    _pendingSave = null;
+    await _enqueueSave(updated);
+    if (!mounted) return;
+    bumpMutation(ref);
+  }
+
+  Future<void> _enqueueSave(Task updated) {
     final repo = ref.read(taskRepoProvider);
     final notifications = ref.read(notificationServiceProvider);
-
-    // 提醒变化 → 重调度通知
-    final remindChanged =
-        updated.remindAt != _task?.remindAt;
-    await repo.upsertTask(updated);
-    if (remindChanged) {
-      await notifications.cancelReminder(updated.id!);
-      if (updated.remindAt != null && !updated.completed) {
-        await notifications.scheduleReminder(updated);
+    _saveQueue = _saveQueue.then((_) async {
+      final remindChanged = updated.remindAt != _lastSaved?.remindAt;
+      await repo.upsertTask(updated);
+      if (remindChanged) {
+        await notifications.cancelReminder(updated.id!);
+        if (updated.remindAt != null && !updated.completed) {
+          await notifications.scheduleReminder(updated);
+        }
       }
+      _lastSaved = updated;
+    });
+    return _saveQueue;
+  }
+
+  /// 月重复以设置时的到期日为锚（BYMONTHDAY）：月末钳制不再漂移
+  /// （1/31 → 2/28 → 3/31，而非 3/28）。非月重复/无锚需求原样返回。
+  String _withMonthAnchor(String encoded) {
+    final rule = RepeatRule.parse(encoded);
+    final due = _task?.dueDate;
+    if (rule == null ||
+        due == null ||
+        rule.freq != RepeatFreq.monthly ||
+        rule.monthDay != null) {
+      return encoded;
     }
-    setState(() => _task = updated);
-    bumpMutation(ref);
+    final anchored = RepeatRule(
+      freq: rule.freq,
+      interval: rule.interval,
+      byWeekdays: rule.byWeekdays,
+      monthDay: DateUtilsEx.parseDate(due).day,
+    );
+    return anchored.encode();
+  }
+
+  /// 额外提醒增删后同步通知系统：先清本任务全部槽位，再按库内当前状态重排。
+  Future<void> _rescheduleTaskNotifications() async {
+    final task = _task;
+    if (task == null) return;
+    final taskId = task.id;
+    if (taskId == null) return;
+    await _flushSave(); // 标题等可能刚改过，通知文案用最新值
+    final repo = ref.read(taskRepoProvider);
+    final notifications = ref.read(notificationServiceProvider);
+    await notifications.cancelReminder(taskId);
+    if (task.completed) return;
+    if (task.remindAt != null) {
+      await notifications.scheduleReminder(task);
+    }
+    final extras = await repo.queryRemindersOf(taskId);
+    if (extras.isNotEmpty) {
+      await notifications.scheduleExtraReminders(
+        taskId: task.id!,
+        title: task.title,
+        note: task.note,
+        epochs: extras.map((e) => e.remindAt).toList(),
+      );
+    }
   }
 
   Future<void> _delete() async {
@@ -137,10 +252,18 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_loaded || _task == null) {
+    if (!_loaded) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    final task = _task!;
+    final task = _task;
+    if (task == null) {
+      // 任务已被删除/传入错误 id：给出提示而非永久转圈
+      return Scaffold(
+        appBar: AppBar(title: Text(AppLocalizations.of(context).taskDetailTitle)),
+        body: Center(
+            child: Text(AppLocalizations.of(context).taskNotFound)),
+      );
+    }
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
 
@@ -165,7 +288,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         children: [
           TextField(
-            controller: TextEditingController(text: task.title),
+            controller: _titleController,
             style: theme.textTheme.headlineSmall
                 ?.copyWith(fontWeight: FontWeight.w600),
             maxLines: 3,
@@ -173,22 +296,27 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               hintText: l10n.taskTitleHint,
               border: InputBorder.none,
             ),
-            onChanged: (v) => _save(task.copyWith(title: v)),
+            onChanged: (_) => _textChanged(),
           ),
           const SizedBox(height: 4),
           TextField(
-            controller: TextEditingController(text: task.note),
+            controller: _noteController,
             maxLines: 5,
             decoration: InputDecoration(
               hintText: l10n.taskNoteHint,
               border: InputBorder.none,
             ),
-            onChanged: (v) => _save(task.copyWith(note: v)),
+            onChanged: (_) => _textChanged(),
           ),
           const Divider(height: 24),
           DateTimeSection(task: task, onChanged: _save),
           const Divider(height: 24),
-          RemindersSection(task: task, onChanged: () => bumpMutation(ref)),
+          RemindersSection(task: task, onChanged: () async {
+            // 额外提醒增删要联动通知系统（旧通知照响/新通知不响的修复）
+            await _rescheduleTaskNotifications();
+            if (!mounted) return;
+            bumpMutation(ref);
+          }),
           ListTile(
             dense: true,
             contentPadding: EdgeInsets.zero,
@@ -211,7 +339,7 @@ class _TaskDetailScreenState extends ConsumerState<TaskDetailScreen> {
               if (!mounted || encoded == null) return; // 取消/点外部关闭
               _save(encoded.isEmpty
                   ? task.copyWith(clearRepeatRule: true)
-                  : task.copyWith(repeatRule: encoded));
+                  : task.copyWith(repeatRule: _withMonthAnchor(encoded)));
             },
           ),
           const Divider(height: 24),

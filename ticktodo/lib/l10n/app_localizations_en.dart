@@ -96,6 +96,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get untitledTask => 'Untitled task';
 
   @override
+  String get taskNotFound => 'Task not found or deleted';
+
+  @override
   String get todayEmptyTitle => 'No tasks for today';
 
   @override

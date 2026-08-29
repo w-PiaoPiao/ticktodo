@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ticktodo/core/constants.dart';
 import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/data/models/habit.dart';
+import 'package:ticktodo/data/repositories/habit_repository.dart';
 import 'package:ticktodo/features/habits/habit_edit_sheet.dart';
 import 'package:ticktodo/l10n/app_localizations.dart';
 import 'package:ticktodo/widgets/empty_state.dart';
@@ -18,11 +19,7 @@ class HabitsScreen extends ConsumerStatefulWidget {
 }
 
 class _HabitsScreenState extends ConsumerState<HabitsScreen> {
-  List<Habit>? _habits;
-  final Map<int, bool> _checkedToday = {};
-  final Map<int, int> _streaks = {};
-  final Map<int, int> _weekCounts = {};
-  final Map<int, Set<String>> _recentDates = {};
+  List<HabitWithStats>? _rows;
   bool _showArchived = false;
   ProviderSubscription<int>? _mutationSub;
 
@@ -40,27 +37,11 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
   }
 
   Future<void> _load() async {
-    final repo = ref.read(habitRepoProvider);
-    final habits = await repo.queryHabits(includeArchived: _showArchived);
-    final todayStr = DateUtilsEx.formatDate(DateTime.now());
-    for (final h in habits) {
-      if (h.id == null) continue;
-      _checkedToday[h.id!] = await repo.isCheckedOn(h.id!, todayStr);
-      _streaks[h.id!] = await repo.currentStreak(h.id!);
-      _weekCounts[h.id!] = await repo.weekCheckCount(h.id!);
-      _recentDates[h.id!] = await _loadRecent(h.id!);
-    }
+    final rows = await ref
+        .read(habitRepoProvider)
+        .habitsWithStats(includeArchived: _showArchived);
     if (!mounted) return;
-    setState(() => _habits = habits);
-  }
-
-  Future<Set<String>> _loadRecent(int habitId) async {
-    final now = DateTime.now();
-    final start =
-        DateTime(now.year, now.month, now.day).subtract(const Duration(days: 34));
-    return ref.read(habitRepoProvider).checkedDates(habitId,
-        start: DateUtilsEx.formatDate(start),
-        end: DateUtilsEx.formatDate(now));
+    setState(() => _rows = rows);
   }
 
   Future<void> _toggle(Habit h) async {
@@ -119,7 +100,7 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    final habits = _habits;
+    final rows = _rows;
     return Scaffold(
       appBar: AppBar(
         title: Text(_showArchived ? l10n.habitArchivedTitle : l10n.habitsTitle),
@@ -132,7 +113,7 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
             onPressed: () {
               setState(() {
                 _showArchived = !_showArchived;
-                _habits = null;
+                _rows = null;
               });
               _load();
             },
@@ -144,9 +125,9 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
         onPressed: () => _openEditor(),
         child: const Icon(Icons.add),
       ),
-      body: habits == null
+      body: rows == null
           ? const Center(child: CircularProgressIndicator())
-          : habits.isEmpty
+          : rows.isEmpty
               ? EmptyState(
                   icon: _showArchived
                       ? Icons.inventory_2_outlined
@@ -161,20 +142,22 @@ class _HabitsScreenState extends ConsumerState<HabitsScreen> {
                   child: ListView(
                     padding: const EdgeInsets.only(bottom: 88),
                     children: [
-                      for (final h in habits)
+                      for (final r in rows)
                         _HabitCard(
-                          habit: h,
-                          checkedToday: _checkedToday[h.id] ?? false,
-                          streak: _streaks[h.id] ?? 0,
-                          weekCount: _weekCounts[h.id] ?? 0,
-                          recentDates: _recentDates[h.id] ?? const {},
-                          onToggle: () => _toggle(h),
-                          onTap: () => _openEditor(h),
-                          onLongPress:
-                              h.archived ? null : () => _setArchived(h, archived: true),
-                          onArchiveToggle: () =>
-                              _setArchived(h, archived: !h.archived),
-                          onDelete: () => _delete(h),
+                          habit: r.habit,
+                          checkedToday: r.checkedToday,
+                          streak: r.streak,
+                          weekCount: r.weekCount,
+                          recentDates: r.recentDates,
+                          onToggle: () => _toggle(r.habit),
+                          onTap: () => _openEditor(r.habit),
+                          onLongPress: r.habit.archived
+                              ? null
+                              : () =>
+                                  _setArchived(r.habit, archived: true),
+                          onArchiveToggle: () => _setArchived(
+                              r.habit, archived: !r.habit.archived),
+                          onDelete: () => _delete(r.habit),
                         ),
                       Padding(
                         padding: const EdgeInsets.all(16),

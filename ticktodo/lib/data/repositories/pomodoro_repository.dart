@@ -34,26 +34,26 @@ class PomodoroRepository {
     return rows.map(PomodoroSession.fromMap).toList();
   }
 
-  /// 今日完成的番茄数。
-  Future<int> todayCount({DateTime? now}) async {
+  /// 今日番茄统计（完成数 + 专注分钟）：单条聚合查询，
+  /// 替代旧实现两次全行拉取后在 Dart 内存聚合。
+  Future<(int, int)> todayStats({DateTime? now}) async {
     final n = now ?? DateTime.now();
     final start = DateTime(n.year, n.month, n.day).millisecondsSinceEpoch;
-    final rows = await db.query('pomodoros',
-        where: 'deletedAt IS NULL AND completed = 1 AND startedAt >= ?',
-        whereArgs: [start]);
-    return rows.length;
+    final rows = await db.rawQuery(
+        'SELECT COUNT(*) AS c, COALESCE(SUM(durationMinutes), 0) AS m '
+        'FROM pomodoros '
+        'WHERE deletedAt IS NULL AND completed = 1 AND startedAt >= ?',
+        [start]);
+    return (rows.first['c'] as int, rows.first['m'] as int);
   }
 
+  /// 今日完成的番茄数。
+  Future<int> todayCount({DateTime? now}) async =>
+      (await todayStats(now: now)).$1;
+
   /// 今日累计专注分钟数（仅完成会话）。
-  Future<int> todayMinutes({DateTime? now}) async {
-    final n = now ?? DateTime.now();
-    final start = DateTime(n.year, n.month, n.day).millisecondsSinceEpoch;
-    final rows = await db.query('pomodoros',
-        columns: ['durationMinutes'],
-        where: 'deletedAt IS NULL AND completed = 1 AND startedAt >= ?',
-        whereArgs: [start]);
-    return rows.fold<int>(0, (sum, r) => sum + (r['durationMinutes'] as int));
-  }
+  Future<int> todayMinutes({DateTime? now}) async =>
+      (await todayStats(now: now)).$2;
 
   /// 近 N 天每日完成数（日期 → 数量），用于柱状统计。
   Future<Map<String, int>> dailyCounts(int days, {DateTime? now}) async {

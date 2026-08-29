@@ -291,12 +291,19 @@ class FilterResultScreen extends ConsumerStatefulWidget {
 
 class _FilterResultScreenState extends ConsumerState<FilterResultScreen> {
   List<Task>? _tasks;
+  ProviderSubscription<int>? _mutationSub;
 
   @override
   void initState() {
     super.initState();
-    ref.listenManual(taskMutationProvider, (_, _) => _load());
+    _mutationSub = ref.listenManual(taskMutationProvider, (_, _) => _load());
     _load();
+  }
+
+  @override
+  void dispose() {
+    _mutationSub?.close();
+    super.dispose();
   }
 
   Future<void> _load() async {

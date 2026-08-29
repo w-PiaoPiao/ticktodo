@@ -184,13 +184,11 @@ class _TaskListViewState extends ConsumerState<TaskListView> {
     final allLists =
         widget.lists ?? ref.watch(listsProvider).valueOrNull ?? const [];
     final tasks = widget.tasks;
-
-    ListModel? listOf(int id) {
-      for (final l in allLists) {
-        if (l.id == id) return l;
-      }
-      return null;
-    }
+    // 预建 id → 清单 映射：每行 O(1) 查找，替代逐行线性扫描 O(N×M)
+    final listById = <int, ListModel>{
+      for (final l in allLists)
+        if (l.id != null) l.id!: l,
+    };
 
     final open = _open;
     final done = _done;
@@ -198,7 +196,7 @@ class _TaskListViewState extends ConsumerState<TaskListView> {
     Widget buildTile(Task t) {
       return TaskTile(
         task: t,
-        list: listOf(t.listId),
+        list: listById[t.listId],
         now: widget.now,
         selectMode: _selecting,
         selected: _selectedIds.contains(t.id),

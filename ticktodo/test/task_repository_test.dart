@@ -113,6 +113,64 @@ void main() {
     expect((await repo.queryByTags([tagB])).length, 1);
   });
 
+  test('取消标签为软删墓碑：查询不再命中，重新添加恢复并清墓碑', () async {
+    final tagA = (await meta.upsertTag(Tag(name: 'A')))!;
+    final t1 = await addTask(title: '带A');
+    await meta.linkTaskTag(t1, tagA);
+    expect((await repo.queryByTags([tagA])).length, 1);
+
+    await meta.unlinkTaskTag(t1, tagA);
+    expect(await repo.queryByTags([tagA]), isEmpty);
+    expect(await meta.tagIdsOfTask(t1), isEmpty);
+    // 墓碑行留在库里，取消事件要靠它同步到其他设备
+    final tombstone = await appDb.db.query('task_tags',
+        where: 'taskId = ? AND tagId = ?', whereArgs: [t1, tagA]);
+    expect(tombstone.single['deletedAt'], isNotNull);
+
+    await meta.linkTaskTag(t1, tagA);
+    expect((await repo.queryByTags([tagA])).length, 1);
+    final relinked = await appDb.db.query('task_tags',
+        where: 'taskId = ? AND tagId = ?', whereArgs: [t1, tagA]);
+    expect(relinked.single['deletedAt'], isNull);
+    expect(relinked.single['updatedAt'], isNotNull);
+  });
+
+  test('本地无关联行时取消标签 → 写入纯墓碑', () async {
+    final tagA = (await meta.upsertTag(Tag(name: 'A')))!;
+    final t1 = await addTask(title: '无关联');
+    await meta.unlinkTaskTag(t1, tagA);
+    final rows = await appDb.db.query('task_tags',
+        where: 'taskId = ? AND tagId = ?', whereArgs: [t1, tagA]);
+    expect(rows.single['deletedAt'], isNotNull);
+    expect(await repo.queryByTags([tagA]), isEmpty);
+  });
+
+  test('删除标签时其关联一并软删留墓碑', () async {
+    final tagA = (await meta.upsertTag(Tag(name: 'A')))!;
+    final t1 = await addTask(title: '带A');
+    await meta.linkTaskTag(t1, tagA);
+    await meta.softDeleteTag(tagA);
+    expect(await repo.queryByTags([tagA]), isEmpty);
+    final links =
+        await appDb.db.query('task_tags', where: 'tagId = ?', whereArgs: [tagA]);
+    expect(links.single['deletedAt'], isNotNull);
+  });
+
+  test('purgeDeleted 清理过期标签墓碑，保留期内的不动', () async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    const day = 24 * 3600 * 1000;
+    final t1 = await addTask(title: 't');
+    await appDb.db.insert('task_tags',
+        {'taskId': t1, 'tagId': 99, 'updatedAt': now - 91 * day, 'deletedAt': now - 91 * day});
+    await appDb.db.insert('task_tags',
+        {'taskId': t1, 'tagId': 98, 'updatedAt': now, 'deletedAt': now});
+    await repo.purgeDeleted(olderThanMs: 90 * day);
+
+    final rows = await appDb.db.query('task_tags');
+    expect(rows.where((r) => r['tagId'] == 99), isEmpty);
+    expect(rows.where((r) => r['tagId'] == 98), isNotEmpty);
+  });
+
   test('default list 不可重复创建', () async {
     final a = await meta.ensureDefaultList();
     final b = await meta.ensureDefaultList();

@@ -85,10 +85,10 @@ class _ListsScreenState extends ConsumerState<ListsScreen> {
     final meta = ref.read(metaRepoProvider);
     final taskRepo = ref.read(taskRepoProvider);
     final defaultListId = await meta.ensureDefaultList();
+    // 批量搬移到默认清单（原来逐个 await upsert，无事务）
     final tasks = await taskRepo.queryByList(list.id!);
-    for (final t in tasks) {
-      await taskRepo.upsertTask(t.copyWith(listId: defaultListId));
-    }
+    await taskRepo.bulkMoveToList(
+        [for (final t in tasks) if (t.id != null) t.id!], defaultListId);
     await meta.softDeleteList(list.id!);
     bumpMutation(ref);
   }
@@ -97,7 +97,8 @@ class _ListsScreenState extends ConsumerState<ListsScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final lists = ref.watch(listsProvider).valueOrNull ?? const <ListModel>[];
-    final taskRepo = ref.read(taskRepoProvider);
+    final counts =
+        ref.watch(taskCountsByListProvider).valueOrNull ?? const <int, int>{};
 
     return Scaffold(
       appBar: AppBar(
@@ -131,12 +132,9 @@ class _ListsScreenState extends ConsumerState<ListsScreen> {
                       Expanded(child: Text(list.name)),
                     ],
                   ),
-                  subtitle: FutureBuilder<int>(
-                    future: taskRepo.queryByList(list.id!).then((t) => t.length),
-                    builder: (_, snap) => Text(
-                      l10n.filterCountLists(snap.data ?? 0),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+                  subtitle: Text(
+                    l10n.filterCountLists(counts[list.id] ?? 0),
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                   trailing: widget.pickMode
                       ? const Icon(Icons.chevron_right)

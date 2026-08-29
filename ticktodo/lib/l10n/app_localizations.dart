@@ -272,6 +272,12 @@ abstract class AppLocalizations {
   /// **'无标题任务'**
   String get untitledTask;
 
+  /// No description provided for @taskNotFound.
+  ///
+  /// In zh, this message translates to:
+  /// **'任务不存在或已删除'**
+  String get taskNotFound;
+
   /// No description provided for @todayEmptyTitle.
   ///
   /// In zh, this message translates to:

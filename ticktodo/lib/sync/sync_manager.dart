@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
+import 'dart:isolate';
 
 import 'package:ticktodo/core/logger.dart';
 import 'package:ticktodo/data/db/app_database.dart';
@@ -13,7 +13,6 @@ import 'package:ticktodo/sync/webdav_client.dart';
 
 const String kBackupPath = 'TickTodo/todo_backup.json.gz';
 const Duration kAutoUploadDebounce = Duration(seconds: 30);
-const Duration kConflictWindow = Duration(minutes: 5);
 
 class SyncResult {
   const SyncResult({
@@ -49,6 +48,10 @@ class SyncManager {
   final TaskRepository _taskRepository;
   final SyncSettings _settings;
   WebDavClient? _client;
+
+  /// 快照真正写入本地库后回调（main 用于重排通知 + 刷新 UI）。
+  /// main 里 container 与 SyncManager 相互依赖，因此用可赋值字段而非构造参数。
+  void Function()? onSnapshotApplied;
 
   Timer? _debounce;
   bool _syncing = false;
@@ -96,38 +99,35 @@ class SyncManager {
   }
 
   Future<SyncResult> _doSync(WebDavClient c) async {
-    final remoteBytes = await c.getFile(kBackupPath);
-    final local = await buildSnapshot(_appDb, _taskRepository.lastMutationAt);
+    // 下载远端与构建本地快照互不依赖，并行执行
+    final remoteBytesF = c.getFile(kBackupPath);
+    final localF = buildSnapshot(_appDb, _taskRepository.lastMutationAt);
+    final remoteBytes = await remoteBytesF;
+    final local = await localF;
 
     if (remoteBytes == null) {
       await _upload(c, local);
       return const SyncResult(didUpload: true);
     }
 
-    final remote = SyncSnapshot.fromJson(
-      jsonDecode(gzipDecode(remoteBytes)) as Map<String, dynamic>,
-    );
+    // gzip 解压 + JSON 解析在大快照下是重 CPU 操作，移出主 isolate 避免卡 UI
+    final remote = await Isolate.run(() => SyncSnapshot.fromJson(
+        jsonDecode(gzipDecode(remoteBytes)) as Map<String, dynamic>));
 
-    final diff = (local.revision - remote.revision).abs();
-    if (diff > kConflictWindow.inMilliseconds) {
-      if (local.revision > remote.revision) {
-        await _upload(c, local);
-        return const SyncResult(didUpload: true);
-      } else {
-        await applySnapshot(_appDb, remote);
-        return const SyncResult(didDownload: true);
-      }
-    }
-
+    // 永远逐条合并，不做"超窗整库覆盖"：本地 revision 依赖内存中的
+    // _lastMutationAt，重启即归零，按它判定新旧会静默覆盖掉另一端数据。
+    // merged 是 local∪remote 超集，applySnapshot 的整表替换因此是无损的。
     final merged = mergeSnapshots(local, remote);
     await applySnapshot(_appDb, merged);
+    onSnapshotApplied?.call();
     await _upload(c, merged);
     return const SyncResult(didUpload: true, didDownload: true, merged: true);
   }
 
   Future<void> _upload(WebDavClient c, SyncSnapshot snapshot) async {
-    final bytes = gzipEncode(snapshot.encode());
-    await c.putFile(kBackupPath, Uint8List.fromList(bytes));
+    // jsonEncode + gzip 在大快照下可达几十 MB 字符串处理，移出主 isolate
+    final bytes = await Isolate.run(() => gzipEncode(snapshot.encode()));
+    await c.putFile(kBackupPath, bytes);
   }
 
   /// 数据变更后调用：防抖 30s 后自动上传（无凭据则忽略）。

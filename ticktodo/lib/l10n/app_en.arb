@@ -31,6 +31,7 @@
   "commonCustom": "Custom",
 
   "untitledTask": "Untitled task",
+  "taskNotFound": "Task not found or deleted",
 
   "todayEmptyTitle": "No tasks for today",
   "todayEmptySubtitle": "Tap + to add quickly",

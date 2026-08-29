@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -67,8 +68,9 @@ class LocalBackupManager {
           '${stamp.second.toString().padLeft(2, '0')}$_suffix';
       final file = File(p.join(dir.path, name));
       final snapshot = await buildSnapshot(_appDb, _nowMs());
-      await file.writeAsBytes(
-          gzipEncode(snapshot.encode()), flush: true);
+      // jsonEncode + gzip 移出主 isolate，避免大快照备份时卡 UI
+      final bytes = await Isolate.run(() => gzipEncode(snapshot.encode()));
+      await file.writeAsBytes(bytes, flush: true);
       await _prefs.setInt(kLastBackupKey, _nowMs());
       await prune();
       AppLogger.info('LocalBackup.backupNow', '已写入 ${file.path}');

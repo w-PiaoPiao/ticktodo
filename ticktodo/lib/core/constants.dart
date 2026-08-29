@@ -9,6 +9,11 @@ class AppColors {
 /// 应用版本（与 pubspec.yaml version 保持同步）
 const String kAppVersion = '1.1.0';
 
+/// 软删墓碑保留期：回收站/习惯/打卡/番茄/标签关联的物理清理窗口。
+/// 必须大于"其他设备的最长离线时长"——软删行承担同步墓碑职责，
+/// 过早物理清理会让长期离线设备重连时把已删数据从远端复活。
+const Duration kTombstoneRetention = Duration(days: 90);
+
 /// 清单色板（选择清单/标签颜色用）
 const List<int> kPalette = [
   0xFF2F9D45, // 绿

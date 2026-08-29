@@ -49,6 +49,71 @@ class HabitRepository {
     return rows.map(Habit.fromMap).toList();
   }
 
+  /// 习惯页批量加载：一次取习惯列表 + 一次取全部有效打卡日期，
+  /// 在内存派生 今日打卡/连续天数/本周次数/近 5 周日期。
+  /// 替代旧实现每个习惯 4 次串行查询（4N+1 → 2 次）。
+  Future<List<HabitWithStats>> habitsWithStats(
+      {bool includeArchived = false, DateTime? now}) async {
+    final n = now ?? DateTime.now();
+    final habits = await queryHabits(includeArchived: includeArchived);
+    if (habits.isEmpty) return const [];
+
+    final ids = [for (final h in habits) if (h.id != null) h.id!];
+    final rows = await db.query('habit_checks',
+        columns: ['habitId', 'date'],
+        where:
+            'deletedAt IS NULL AND habitId IN (${List.filled(ids.length, '?').join(',')})',
+        whereArgs: ids);
+    final byHabit = <int, Set<String>>{};
+    for (final r in rows) {
+      byHabit
+          .putIfAbsent(r['habitId'] as int, () => {})
+          .add(r['date'] as String);
+    }
+
+    final today = DateTime(n.year, n.month, n.day);
+    final todayStr = DateUtilsEx.formatDate(today);
+    final monday = today.subtract(Duration(days: n.weekday - 1));
+    final weekStartStr = DateUtilsEx.formatDate(monday);
+    final weekEndStr =
+        DateUtilsEx.formatDate(monday.add(const Duration(days: 6)));
+    final recentStartStr =
+        DateUtilsEx.formatDate(today.subtract(const Duration(days: 34)));
+
+    final result = <HabitWithStats>[];
+    for (final h in habits) {
+      final id = h.id;
+      final dates = (id == null ? null : byHabit[id]) ?? const <String>{};
+      // 连续天数：从今天往前回溯（今天未打卡不中断，从昨天起算）
+      var streak = 0;
+      var cursor = today;
+      if (!dates.contains(DateUtilsEx.formatDate(cursor))) {
+        cursor = cursor.subtract(const Duration(days: 1));
+      }
+      while (dates.contains(DateUtilsEx.formatDate(cursor))) {
+        streak++;
+        cursor = cursor.subtract(const Duration(days: 1));
+        if (streak > 3650) break;
+      }
+      var weekCount = 0;
+      final recent = <String>{};
+      for (final d in dates) {
+        if (d.compareTo(weekStartStr) >= 0 && d.compareTo(weekEndStr) <= 0) {
+          weekCount++;
+        }
+        if (d.compareTo(recentStartStr) >= 0) recent.add(d);
+      }
+      result.add(HabitWithStats(
+        habit: h,
+        checkedToday: dates.contains(todayStr),
+        streak: streak,
+        weekCount: weekCount,
+        recentDates: recent,
+      ));
+    }
+    return result;
+  }
+
   // ---------- 打卡 ----------
 
   /// 切换某习惯某天的打卡状态，返回切换后是否已打勾。
@@ -149,12 +214,32 @@ class HabitRepository {
     final habits = await db.delete('habits',
         where: 'deletedAt IS NOT NULL AND deletedAt <= ?',
         whereArgs: [cutoff]);
-    // 打卡记录可能因习惯已硬删而成为孤儿，一并按自身 deletedAt 清理
+    // 打卡记录可能因习惯已硬删而成为孤儿，一并按自身 deletedAt 清理。
+    // 括号必要：A AND B OR C 会按 (A AND B) OR C 解析，孤儿记录将无视时限被立即删。
     final checks = await db.delete('habit_checks',
         where:
-            'deletedAt IS NOT NULL AND deletedAt <= ? '
+            '(deletedAt IS NOT NULL AND deletedAt <= ?) '
             'OR habitId NOT IN (SELECT id FROM habits)',
         whereArgs: [cutoff]);
     return habits + checks;
   }
+}
+
+/// 习惯卡片所需的聚合数据（[HabitRepository.habitsWithStats] 的结果行）。
+class HabitWithStats {
+  const HabitWithStats({
+    required this.habit,
+    required this.checkedToday,
+    required this.streak,
+    required this.weekCount,
+    required this.recentDates,
+  });
+
+  final Habit habit;
+  final bool checkedToday;
+  final int streak;
+  final int weekCount;
+
+  /// 近 5 周打卡日期（热力图）。
+  final Set<String> recentDates;
 }
