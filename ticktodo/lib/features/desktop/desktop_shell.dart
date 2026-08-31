@@ -142,15 +142,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
             PlatformMenuItem(
               label: '${i + 1}. ${_viewLabel(i, l10n)}',
               onSelected: () => setState(() => _index = i),
-              shortcut: SingleActivator(
-                [
-                  LogicalKeyboardKey.digit1,
-                  LogicalKeyboardKey.digit2,
-                  LogicalKeyboardKey.digit3,
-                  LogicalKeyboardKey.digit4,
-                ][i],
-                meta: true,
-              ),
+              shortcut: SingleActivator(_viewKeys[i], meta: true),
             ),
         ]),
         PlatformMenu(label: l10n.desktopMenuHelp, menus: [
