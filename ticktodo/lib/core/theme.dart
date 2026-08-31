@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 
-/// 滴答绿主题色
-const Color kSeedColor = Color(0xFF2F9D45);
+/// 滴答蓝主题色（现代生产力应用配色）
+const Color kSeedColor = Color(0xFF4772FA);
 
 ThemeData buildLightTheme() {
   final scheme = ColorScheme.fromSeed(seedColor: kSeedColor);
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
-    scaffoldBackgroundColor: const Color(0xFFF7F8F7),
+    scaffoldBackgroundColor: const Color(0xFFF6F7F9),
     appBarTheme: AppBarTheme(
       backgroundColor: scheme.surface,
       surfaceTintColor: Colors.transparent,
@@ -23,6 +23,10 @@ ThemeData buildLightTheme() {
     ),
     listTileTheme: const ListTileThemeData(
       contentPadding: EdgeInsets.symmetric(horizontal: 16),
+    ),
+    navigationBarTheme: NavigationBarThemeData(
+      backgroundColor: scheme.surface,
+      indicatorColor: scheme.primary.withValues(alpha: 0.14),
     ),
   );
 }
@@ -35,7 +39,7 @@ ThemeData buildDarkTheme() {
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
-    scaffoldBackgroundColor: const Color(0xFF121212),
+    scaffoldBackgroundColor: const Color(0xFF101318),
     appBarTheme: AppBarTheme(
       backgroundColor: scheme.surface,
       surfaceTintColor: Colors.transparent,
@@ -50,6 +54,10 @@ ThemeData buildDarkTheme() {
     ),
     listTileTheme: const ListTileThemeData(
       contentPadding: EdgeInsets.symmetric(horizontal: 16),
+    ),
+    navigationBarTheme: NavigationBarThemeData(
+      backgroundColor: scheme.surface,
+      indicatorColor: scheme.primary.withValues(alpha: 0.18),
     ),
   );
 }

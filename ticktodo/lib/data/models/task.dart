@@ -1,8 +1,8 @@
 enum TaskPriority {
   none(0, '无', 0xFF9E9E9E),
   low(1, '低', 0xFF4C9AFF),
-  medium(2, '中', 0xFF2F9D45),
-  high(3, '高', 0xFFE04C4C);
+  medium(2, '中', 0xFF30A46C),
+  high(3, '高', 0xFFE5484D);
 
   const TaskPriority(this.value, this.label, this.colorValue);
   final int value;

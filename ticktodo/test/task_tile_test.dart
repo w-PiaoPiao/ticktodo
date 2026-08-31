@@ -32,9 +32,9 @@ void main() {
       await tester.pumpWidget(
           wrap(Column(children: [TaskTile(task: overdue, now: now), TaskTile(task: today, now: now)])));
       final overdueBadge = tester.widget<Text>(find.text('昨天'));
-      expect(overdueBadge.style?.color, const Color(0xFFE04C4C));
+      expect(overdueBadge.style?.color, const Color(0xFFE5484D));
       final todayBadge = tester.widget<Text>(find.text('今天'));
-      expect(todayBadge.style?.color, isNot(const Color(0xFFE04C4C)));
+      expect(todayBadge.style?.color, isNot(const Color(0xFFE5484D)));
     });
 
     testWidgets('勾选回调触发', (tester) async {

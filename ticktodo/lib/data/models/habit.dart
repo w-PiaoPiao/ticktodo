@@ -69,7 +69,7 @@ class Habit {
   const Habit({
     this.id,
     required this.name,
-    this.color = 0xFF2F9D45,
+    this.color = 0xFF30A46C,
     this.targetDays = 0,
     this.archived = false,
     this.sortOrder = 0,
@@ -131,7 +131,7 @@ class Habit {
   factory Habit.fromMap(Map<String, Object?> map) => Habit(
         id: map['id'] as int?,
         name: map['name'] as String? ?? '',
-        color: map['color'] as int? ?? 0xFF2F9D45,
+        color: map['color'] as int? ?? 0xFF30A46C,
         targetDays: map['targetDays'] as int? ?? 0,
         archived: (map['archived'] as int? ?? 0) == 1,
         sortOrder: map['sortOrder'] as int? ?? 0,

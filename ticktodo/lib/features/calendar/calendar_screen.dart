@@ -8,13 +8,15 @@ import 'package:ticktodo/features/detail/task_detail_screen.dart';
 import 'package:ticktodo/features/shared/task_list_view.dart';
 import 'package:ticktodo/l10n/app_localizations.dart';
 
-/// 月内到期任务（日历圆点 + 点选当天详情）
+/// 网格范围内（固定 6 行，含前后月填充日）的到期任务：
+/// 日历圆点与选中日期任务列表都基于它。
 final monthTasksProvider =
     FutureProvider.family<List<Task>, DateTime>((ref, month) async {
   ref.watch(taskMutationProvider);
   final repo = ref.read(taskRepoProvider);
-  final start = DateTime(month.year, month.month, 1);
-  final end = DateTime(month.year, month.month + 1, 0);
+  final cells = buildMonthGrid(month.year, month.month);
+  final start = cells.first.date;
+  final end = cells.last.date;
   final tasks = await repo.queryWeek(
     start: DateUtilsEx.formatDate(start),
     end: DateUtilsEx.formatDate(end),
@@ -116,36 +118,48 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             ),
           ),
           const SizedBox(height: 4),
-          // 网格
+          // 网格：固定 6 行 × 固定行高，保证完整显示当月（如 31 日）
+          // 且不挤压下方任务列表
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: GridView.count(
-              crossAxisCount: 7,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 4,
-              children: [
-                for (final cell in cells)
-                  _DayCellWidget(
-                    cell: cell,
-                    isToday: cell.inMonth &&
-                        cell.day == now.day &&
-                        _month.year == now.year &&
-                        _month.month == now.month,
-                    isSelected: cell.inMonth &&
-                        selectedStr != null &&
-                        selectedStr ==
-                            '${_month.year}-${_month.month.toString().padLeft(2, '0')}-${cell.day.toString().padLeft(2, '0')}',
-                    hasTask: cell.inMonth &&
-                        byDate.containsKey('${_month.year}-'
-                            '${_month.month.toString().padLeft(2, '0')}-'
-                            '${cell.day.toString().padLeft(2, '0')}'),
-                    onTap: cell.inMonth
-                        ? () => setState(() => _selectedDay = DateTime(
-                            _month.year, _month.month, cell.day))
-                        : null,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                const cellHeight = 44.0;
+                const mainSpacing = 4.0;
+                final aspect =
+                    (constraints.maxWidth / 7) / cellHeight;
+                return SizedBox(
+                  height: 6 * cellHeight + 5 * mainSpacing,
+                  child: GridView.count(
+                    crossAxisCount: 7,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: mainSpacing,
+                    childAspectRatio: aspect,
+                    children: [
+                      for (final cell in cells)
+                        _DayCellWidget(
+                          cell: cell,
+                          isToday: DateUtilsEx.formatDate(cell.date) ==
+                              DateUtilsEx.formatDate(now),
+                          isSelected: selectedStr != null &&
+                              selectedStr ==
+                                  DateUtilsEx.formatDate(cell.date),
+                          hasTask:
+                              byDate.containsKey(DateUtilsEx.formatDate(cell.date)),
+                          onTap: () => setState(() {
+                            _selectedDay = cell.date;
+                            // 点到前后月填充日时切换到对应月份
+                            if (cell.date.month != _month.month ||
+                                cell.date.year != _month.year) {
+                              _month =
+                                  DateTime(cell.date.year, cell.date.month);
+                            }
+                          }),
+                        ),
+                    ],
                   ),
-              ],
+                );
+              },
             ),
           ),
           const Divider(height: 24),
@@ -231,7 +245,7 @@ class _DayCellWidget extends StatelessWidget {
           alignment: Alignment.center,
           children: [
             Text(
-              cell.day == 0 ? '' : '${cell.day}',
+              '${cell.date.day}',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: cell.inMonth
                     ? (isToday ? theme.colorScheme.primary : null)

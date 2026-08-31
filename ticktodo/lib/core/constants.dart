@@ -3,7 +3,7 @@ import 'package:ticktodo/l10n/app_localizations.dart';
 
 /// 状态/优先级等共用常量
 class AppColors {
-  static const int overDueRed = 0xFFE04C4C;
+  static const int overDueRed = 0xFFE5484D;
 }
 
 /// 应用版本（与 pubspec.yaml version 保持同步）
@@ -16,16 +16,16 @@ const Duration kTombstoneRetention = Duration(days: 90);
 
 /// 清单色板（选择清单/标签颜色用）
 const List<int> kPalette = [
-  0xFF2F9D45, // 绿
-  0xFFE04C4C, // 红
-  0xFF4C9AFF, // 蓝
-  0xFFF29900, // 橙
-  0xFF9B59B6, // 紫
-  0xFF00B8A9, // 青
-  0xFFE85D9E, // 粉
-  0xFF607D8B, // 灰蓝
-  0xFF8B7355, // 棕
-  0xFF3F51B5, // 靛蓝
+  0xFF4772FA, // 蓝（主色）
+  0xFFE5484D, // 红
+  0xFFF5A623, // 橙
+  0xFF30A46C, // 绿
+  0xFF12A594, // 青
+  0xFF9B7EDE, // 紫
+  0xFFE86FA4, // 粉
+  0xFF5B6B8C, // 灰蓝
+  0xFF94806B, // 棕
+  0xFF6E56CF, // 靛
 ];
 
 /// 日期工具
@@ -57,6 +57,13 @@ class DateUtilsEx {
   static String formatTimeOfDay(TimeOfDay t) {
     return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
   }
+
+  /// 当天 00:00（去掉时分秒）。
+  static DateTime startOfDay(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  /// 加 N 天（跨月/跨年安全）。
+  static DateTime addDays(DateTime d, int days) =>
+      DateTime(d.year, d.month, d.day + days);
 }
 
 /// 日期徽章文案：今天/明天/昨天/MM月dd日（本地化）

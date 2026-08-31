@@ -2,7 +2,7 @@ class ListModel {
   const ListModel({
     this.id,
     required this.name,
-    this.color = 0xFF2F9D45,
+    this.color = 0xFF30A46C,
     this.icon = 0,
     this.sortOrder = 0,
     this.isDefault = false,
@@ -68,7 +68,7 @@ class ListModel {
   factory ListModel.fromMap(Map<String, Object?> map) => ListModel(
         id: map['id'] as int?,
         name: map['name'] as String? ?? '',
-        color: map['color'] as int? ?? 0xFF2F9D45,
+        color: map['color'] as int? ?? 0xFF30A46C,
         icon: map['icon'] as int? ?? 0,
         sortOrder: map['sortOrder'] as int? ?? 0,
         isDefault: (map['isDefault'] as int? ?? 0) == 1,

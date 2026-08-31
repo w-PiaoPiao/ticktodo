@@ -44,7 +44,7 @@ class MatrixScreen extends ConsumerWidget {
                 _quadrant(context,
                     title: l10n.matrixQ1Title, subtitle: l10n.matrixQ1Subtitle, tasks: q1, color: AppColors.overDueRed),
                 _quadrant(context,
-                    title: l10n.matrixQ2Title, subtitle: l10n.matrixQ2Subtitle, tasks: q2, color: 0xFF2F9D45),
+                    title: l10n.matrixQ2Title, subtitle: l10n.matrixQ2Subtitle, tasks: q2, color: 0xFF30A46C),
               ],
             ),
           ),
@@ -52,7 +52,7 @@ class MatrixScreen extends ConsumerWidget {
             child: Row(
               children: [
                 _quadrant(context,
-                    title: l10n.matrixQ3Title, subtitle: l10n.matrixQ3Subtitle, tasks: q3, color: 0xFFF29900),
+                    title: l10n.matrixQ3Title, subtitle: l10n.matrixQ3Subtitle, tasks: q3, color: 0xFFF5A623),
                 _quadrant(context,
                     title: l10n.matrixQ4Title, subtitle: l10n.matrixQ4Subtitle, tasks: q4, color: 0xFF9E9E9E),
               ],

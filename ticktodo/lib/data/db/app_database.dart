@@ -114,7 +114,7 @@ class AppDatabase {
       CREATE TABLE IF NOT EXISTS habits (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
-        color INTEGER NOT NULL DEFAULT 0xFF2F9D45,
+        color INTEGER NOT NULL DEFAULT 0xFF30A46C,
         targetDays INTEGER NOT NULL DEFAULT 0,
         archived INTEGER NOT NULL DEFAULT 0,
         sortOrder INTEGER NOT NULL DEFAULT 0,
@@ -158,7 +158,7 @@ class AppDatabase {
       CREATE TABLE lists (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
-        color INTEGER NOT NULL DEFAULT 0xFF2F9D45,
+        color INTEGER NOT NULL DEFAULT 0xFF30A46C,
         icon INTEGER NOT NULL DEFAULT 0,
         sortOrder INTEGER NOT NULL DEFAULT 0,
         isDefault INTEGER NOT NULL DEFAULT 0,

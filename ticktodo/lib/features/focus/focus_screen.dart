@@ -265,9 +265,9 @@ class _FocusScreenState extends ConsumerState<FocusScreen> {
     return Chip(
       label: Text(text),
       backgroundColor: _phase == _Phase.breakTime
-          ? const Color(0x152F9D45)
+          ? const Color(0x1530A46C)
           : _phase == _Phase.focus
-              ? const Color(0x15E04C4C)
+              ? const Color(0x15E5484D)
               : null,
     );
   }
@@ -409,8 +409,8 @@ class _CountdownRingState extends State<_CountdownRing> {
               strokeCap: StrokeCap.round,
               backgroundColor: theme.colorScheme.surfaceContainerHighest,
               color: widget.isBreak
-                  ? const Color(0xFF2F9D45)
-                  : const Color(0xFFE04C4C),
+                  ? const Color(0xFF30A46C)
+                  : const Color(0xFFE5484D),
             ),
           ),
           Column(

@@ -260,11 +260,11 @@ class _HabitCard extends StatelessWidget {
                   if (streak > 0)
                     Chip(
                       avatar: const Icon(Icons.local_fire_department,
-                          size: 15, color: Color(0xFFF29900)),
+                          size: 15, color: Color(0xFFF5A623)),
                       label: Text(l10n.habitStreakDays(streak),
                           style: theme.textTheme.labelSmall),
                       visualDensity: VisualDensity.compact,
-                      backgroundColor: const Color(0x1AF29900),
+                      backgroundColor: const Color(0x1AF5A623),
                     ),
                   Chip(
                     label: Text(l10n.habitWeekProgress(weekCount, _weeklyTarget),
