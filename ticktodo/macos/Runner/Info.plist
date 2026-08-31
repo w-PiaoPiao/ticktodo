@@ -30,5 +30,12 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<!-- Flutter 3.44 macOS：Impeller 与 AppKit 平台视图（PlatformMenuBar）同用
+	     会渲染纯黑（flutter#191154），实验性线程合并也有黑屏报告（flutter#164756）。
+	     回退 Skia + 传统线程拓扑，待上游修复后再移除。 -->
+	<key>FLTEnableImpeller</key>
+	<false/>
+	<key>FLTEnableMergedPlatformUIThread</key>
+	<false/>
 </dict>
 </plist>
