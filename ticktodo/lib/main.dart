@@ -23,9 +23,22 @@ import 'package:ticktodo/sync/sync_settings.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await _bootstrapAndRun();
+  } catch (e, s) {
+    // 启动期兜底：任何初始化失败都必须可见（错误页 + 日志），
+    // 绝不允许 runApp 前静默抛错 → 黑窗口无内容。
+    AppLogger.error('main.fatal', e, s);
+    runApp(_FatalErrorApp(error: e));
+  }
+}
+
+Future<void> _bootstrapAndRun() async {
   await AppLogger.init();
 
-  // 桌面平台（macOS/Windows/Linux）sqflite 不支持插件通道，改用 FFI 实现
+  // 桌面平台（macOS/Windows/Linux）sqflite 不支持插件通道，改用 FFI 实现；
+  // 数据库落盘路径由 AppDatabase.resolveDatabasePath 统一为绝对路径
+  // （FFI 的 getDatabasesPath 兜底按 cwd 解析，Finder 启动时 cwd=/ 会失败）。
   if (!kIsWeb &&
       (Platform.isMacOS || Platform.isWindows || Platform.isLinux)) {
     sqfliteFfiInit();
@@ -118,4 +131,48 @@ Future<AppLocalizations?> _loadNotifL10n(Locale locale) async {
 
 void unawaitedSync(Future<void> f) {
   f.then((_) {}, onError: (_) {});
+}
+
+/// 启动失败的可见兜底页（避免"进程活着但永远黑屏"的静默故障）。
+class _FatalErrorApp extends StatelessWidget {
+  const _FatalErrorApp({required this.error});
+
+  final Object error;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline, size: 40),
+                const SizedBox(height: 16),
+                const Text(
+                  '启动失败',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '$error',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  '请重新打开应用；若持续失败请查看日志（文档目录 logs/app.log）并反馈。',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

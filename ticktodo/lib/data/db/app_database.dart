@@ -1,5 +1,10 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:ticktodo/core/logger.dart';
 
 class AppDatabase {
   AppDatabase(this.db);
@@ -9,8 +14,13 @@ class AppDatabase {
   static const _version = 5;
 
   static Future<AppDatabase> open({String? inMemoryPath}) async {
-    final path = inMemoryPath ??
-        p.join(await getDatabasesPath(), 'ticktodo.db');
+    late final String path;
+    if (inMemoryPath != null) {
+      path = inMemoryPath;
+    } else {
+      path = await resolveDatabasePath();
+      if (_isDesktop) await _migrateLegacyDatabase(path);
+    }
     final db = await openDatabase(
       path,
       version: _version,
@@ -24,6 +34,71 @@ class AppDatabase {
       },
     );
     return AppDatabase(db);
+  }
+
+  /// 桌面端（macOS/Windows/Linux）使用 sqflite FFI：其 getDatabasesPath()
+  /// 兜底为「当前工作目录/.dart_tool/sqflite_common_ffi/databases」——
+  /// Finder/双击启动时 cwd=/，打开失败导致 main 在 runApp 前抛错（黑屏）。
+  /// 桌面端一律解析为 Application Support 下的绝对路径；移动端仍走平台通道。
+  static bool get _isDesktop =>
+      !kIsWeb &&
+      (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
+
+  /// 解析数据库绝对路径（与 cwd 无关，可在测试中注入 path_provider 桩）。
+  static Future<String> resolveDatabasePath() async {
+    if (!_isDesktop) {
+      return p.join(await getDatabasesPath(), 'ticktodo.db');
+    }
+    final support = await getApplicationSupportDirectory();
+    return p.join(support.path, 'databases', 'ticktodo.db');
+  }
+
+  /// 一次性迁移：新路径无库时，从历史遗留位置复制最新的一份副本。
+  /// 复制而非移动（保留源文件）；失败仅告警——宁可空库启动也不黑屏。
+  static Future<void> _migrateLegacyDatabase(String targetPath) async {
+    try {
+      if (await File(targetPath).exists()) return;
+      final normalizedTarget = p.normalize(targetPath);
+      final candidates = <String>[
+        // 终端启动时代码曾落库的位置（cwd 兜底）
+        p.join(Directory.current.path, '.dart_tool', 'sqflite_common_ffi',
+            'databases', 'ticktodo.db'),
+        // macOS 旧沙盒容器（com.apple.security.app-sandbox 时代）
+        if (Platform.isMacOS)
+          p.join(
+              Platform.environment['HOME'] ?? '',
+              'Library',
+              'Containers',
+              'com.ticktodo.ticktodo',
+              'Data',
+              '.dart_tool',
+              'sqflite_common_ffi',
+              'databases',
+              'ticktodo.db'),
+      ];
+      File? best;
+      DateTime? bestTime;
+      for (final c in candidates) {
+        if (p.equals(p.normalize(c), normalizedTarget)) continue;
+        final f = File(c);
+        if (!await f.exists()) continue;
+        final mtime = await f.lastModified();
+        if (best == null || (bestTime != null && mtime.isAfter(bestTime))) {
+          best = f;
+          bestTime = mtime;
+        }
+      }
+      if (best == null) return;
+      await Directory(p.dirname(targetPath)).create(recursive: true);
+      for (final suffix in ['', '-wal', '-shm']) {
+        final src = File('${best.path}$suffix');
+        if (await src.exists()) await src.copy('$targetPath$suffix');
+      }
+      AppLogger.info(
+          'db.migratePath', '已从旧位置迁移数据库：${best.path} → $targetPath');
+    } catch (e) {
+      AppLogger.warn('db.migratePath', '迁移旧数据库失败，将以空库启动：$e');
+    }
   }
 
   /// v1 → v2：tasks 表新增 repeatRule 列（简化 RRULE 编码，NULL=不重复）。
