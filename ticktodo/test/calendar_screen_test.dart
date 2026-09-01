@@ -3,11 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:ticktodo/core/constants.dart';
 import 'package:ticktodo/core/providers.dart';
 import 'package:ticktodo/data/db/app_database.dart';
+import 'package:ticktodo/data/models/task.dart';
 import 'package:ticktodo/data/repositories/meta_repository.dart';
 import 'package:ticktodo/data/repositories/task_repository.dart';
 import 'package:ticktodo/features/calendar/calendar_screen.dart';
+import 'package:ticktodo/l10n/app_localizations.dart';
 
 import 'support/test_app.dart';
 import 'package:ticktodo/features/calendar/month_grid.dart';
@@ -99,15 +102,57 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
     }
 
-    testWidgets('initialDate 定位月份并选中该日期', (tester) async {
+    testWidgets('initialDate 定位月份并自动弹出当日弹层', (tester) async {
       await pump(tester, '2026-08-15');
+      await tester.pumpAndSettle();
       expect(find.text('2026年8月'), findsOneWidget);
-      expect(find.text('8月15日'), findsOneWidget);
+      final l10n =
+          AppLocalizations.of(tester.element(find.byType(CalendarScreen)));
+      expect(find.text(dateBadge('2026-08-15', l10n, now: DateTime.now())),
+          findsOneWidget); // 弹层日期标题
+      expect(find.text('当天没有任务'), findsOneWidget);
     });
 
-    testWidgets('无 initialDate 时选中为空', (tester) async {
+    testWidgets('点击日期弹出当日任务弹层', (tester) async {
       await pump(tester, null);
-      expect(find.text('点击日期查看当天任务'), findsOneWidget);
+      // 初始未打开弹层
+      expect(find.text('当天没有任务'), findsNothing);
+      await tester.tap(find.text('16'));
+      await tester.pumpAndSettle();
+      // 标题跟随 dateBadge 规则（今天/明天/昨天/M月d日），避免真实时钟撞日脆弱
+      final l10n =
+          AppLocalizations.of(tester.element(find.byType(CalendarScreen)));
+      final now = DateTime.now();
+      expect(
+          find.text(dateBadge(
+              DateUtilsEx.formatDate(DateTime(now.year, now.month, 16)),
+              l10n,
+              now: now)),
+          findsOneWidget);
+      expect(find.text('当天没有任务'), findsOneWidget);
+    });
+
+    testWidgets('日期卡片显示任务摘要条目与溢出计数', (tester) async {
+      final day = DateUtilsEx.formatDate(DateTime(2026, 9, 16));
+      final tasks = [
+        const Task(
+            id: 1,
+            title: '买牛奶',
+            listId: 1,
+            dueDate: '2026-09-16',
+            priority: TaskPriority.high),
+        for (var i = 0; i < 5; i++)
+          Task(id: 10 + i, title: '长任务标题$i', listId: 1, dueDate: day),
+      ];
+      when(() => repo.queryWeek(
+              start: any(named: 'start'), end: any(named: 'end')))
+          .thenAnswer((_) async => tasks);
+      await pump(tester, null);
+      await tester.pumpAndSettle();
+      // 网格内直接可见摘要 chip（无需点开日期）
+      expect(find.text('买牛奶'), findsOneWidget);
+      // 每格最多 4 条：6 条任务溢出 2 条
+      expect(find.text('+2'), findsOneWidget);
     });
   });
 }
